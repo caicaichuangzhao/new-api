@@ -3681,6 +3681,14 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "删除所选兑换码": "Supprimer les codes de rachat sélectionnés",
+    "批量删除兑换码": "Supprimer les codes de rachat en lot",
+    "确定要删除所选的 {{count}} 个兑换码吗？": "Voulez-vous vraiment supprimer les {{count}} codes de rachat sélectionnés ?",
+    "已删除 {{count}} 个兑换码！": "{{count}} codes de rachat supprimés !",
+    "等价原生额度：{{quota}} Token": "Quota brut équivalent : {{quota}} Token",
+    "当前按 {{unit}} 输入，保存时自动换算为系统原生额度。": "Les valeurs sont saisies en {{unit}} et enregistrées comme quota brut.",
+    "例如：10": "Exemple : 10",
+    "例如：5": "Exemple : 5"
   }
 }

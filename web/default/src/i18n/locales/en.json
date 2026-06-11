@@ -1777,7 +1777,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Force a syntactically valid JSON response",
@@ -4538,6 +4538,13 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Delete selected redemption codes": "Delete selected redemption codes",
+    "Delete {{count}} redemption code(s)?": "Delete {{count}} redemption code(s)?",
+    "You are about to delete {{count}} redemption code(s).": "You are about to delete {{count}} redemption code(s).",
+    "Successfully deleted {{count}} redemption code(s)": "Successfully deleted {{count}} redemption code(s)",
+    "Failed to delete redemption codes": "Failed to delete redemption codes",
+    "Equivalent raw quota: {{quota}} Token": "Equivalent raw quota: {{quota}} Token",
+    "Values are entered as {{unit}} and saved as raw quota.": "Values are entered as {{unit}} and saved as raw quota."
   }
 }

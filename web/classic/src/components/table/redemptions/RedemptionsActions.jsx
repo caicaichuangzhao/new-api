@@ -25,7 +25,8 @@ const RedemptionsActions = ({
   setEditingRedemption,
   setShowEdit,
   batchCopyRedemptions,
-  batchDeleteRedemptions,
+  batchDeleteSelectedRedemptions,
+  clearInvalidRedemptions,
   t,
 }) => {
   // Add new redemption code
@@ -58,8 +59,18 @@ const RedemptionsActions = ({
 
       <Button
         type='danger'
+        className='flex-1 md:flex-initial'
+        onClick={batchDeleteSelectedRedemptions}
+        size='small'
+      >
+        {t('删除所选兑换码')}
+      </Button>
+
+      <Button
+        type='danger'
+        theme='borderless'
         className='w-full md:w-auto'
-        onClick={batchDeleteRedemptions}
+        onClick={clearInvalidRedemptions}
         size='small'
       >
         {t('清除失效兑换码')}

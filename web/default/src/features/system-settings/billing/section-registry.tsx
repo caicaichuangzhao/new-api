@@ -74,6 +74,17 @@ const BILLING_SECTIONS = [
           (settings['payment_setting.compliance_confirmed'] ?? false) &&
           settings['payment_setting.compliance_terms_version'] === 'v1'
         }
+        currencyConfig={{
+          quotaDisplayType: parseCurrencyDisplayType(
+            settings['general_setting.quota_display_type']
+          ),
+          quotaPerUnit: settings.QuotaPerUnit,
+          usdExchangeRate: settings.USDExchangeRate,
+          customCurrencySymbol:
+            settings['general_setting.custom_currency_symbol'] ?? '¤',
+          customCurrencyExchangeRate:
+            settings['general_setting.custom_currency_exchange_rate'] ?? 1,
+        }}
       />
     ),
   },

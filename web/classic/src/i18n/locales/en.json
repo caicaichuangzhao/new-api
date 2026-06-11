@@ -3827,6 +3827,14 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "删除所选兑换码": "Delete selected redemption codes",
+    "批量删除兑换码": "Batch delete redemption codes",
+    "确定要删除所选的 {{count}} 个兑换码吗？": "Are you sure you want to delete the selected {{count}} redemption codes?",
+    "已删除 {{count}} 个兑换码！": "Deleted {{count}} redemption codes!",
+    "等价原生额度：{{quota}} Token": "Equivalent raw quota: {{quota}} Token",
+    "当前按 {{unit}} 输入，保存时自动换算为系统原生额度。": "Values are entered as {{unit}} and saved as raw quota.",
+    "例如：10": "Example: 10",
+    "例如：5": "Example: 5"
   }
 }

@@ -43,6 +43,9 @@ type ClaudeConvertInfo struct {
 
 	ToolCallBaseIndex      int
 	ToolCallMaxIndexOffset int
+	ToolCallStarted        map[int]bool
+	ToolCallPending        map[int]dto.ToolCallResponse
+	ToolCallPendingArgs    map[int]string
 }
 
 type RerankerInfo struct {

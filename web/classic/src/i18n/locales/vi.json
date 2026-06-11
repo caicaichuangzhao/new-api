@@ -4215,6 +4215,14 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "删除所选兑换码": "Xóa mã đổi thưởng đã chọn",
+    "批量删除兑换码": "Xóa hàng loạt mã đổi thưởng",
+    "确定要删除所选的 {{count}} 个兑换码吗？": "Bạn có chắc muốn xóa {{count}} mã đổi thưởng đã chọn?",
+    "已删除 {{count}} 个兑换码！": "Đã xóa {{count}} mã đổi thưởng!",
+    "等价原生额度：{{quota}} Token": "Hạn mức gốc tương đương: {{quota}} Token",
+    "当前按 {{unit}} 输入，保存时自动换算为系统原生额度。": "Giá trị được nhập bằng {{unit}} và lưu dưới dạng hạn mức gốc.",
+    "例如：10": "Ví dụ: 10",
+    "例如：5": "Ví dụ: 5"
   }
 }

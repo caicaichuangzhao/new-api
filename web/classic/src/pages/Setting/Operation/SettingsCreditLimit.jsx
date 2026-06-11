@@ -17,8 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Banner, Button, Col, Form, Row, Spin } from '@douyinfe/semi-ui';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import {
+  Banner,
+  Button,
+  Col,
+  Form,
+  InputNumber,
+  Row,
+  Spin,
+  Typography,
+} from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import {
   compareObjects,
@@ -27,6 +36,14 @@ import {
   showSuccess,
   showWarning,
 } from '../../../helpers';
+
+const { Text } = Typography;
+const QUOTA_FIELDS = [
+  'QuotaForNewUser',
+  'PreConsumedQuota',
+  'QuotaForInviter',
+  'QuotaForInvitee',
+];
 
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
@@ -38,11 +55,135 @@ export default function SettingsCreditLimit(props) {
     QuotaForInvitee: '',
     'quota_setting.enable_free_model_pre_consume': true,
   });
+  const [displayInputs, setDisplayInputs] = useState({});
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
   const complianceConfirmed =
     props.options?.['payment_setting.compliance_confirmed'] === true ||
     props.options?.['payment_setting.compliance_confirmed'] === 'true';
+  const quotaDisplayType =
+    props.options?.['general_setting.quota_display_type'] ||
+    localStorage.getItem('quota_display_type') ||
+    'USD';
+  const quotaPerUnit = useMemo(() => {
+    const raw = parseFloat(
+      props.options?.QuotaPerUnit ||
+        localStorage.getItem('quota_per_unit') ||
+        '500000',
+    );
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+  }, [props.options]);
+  const currencyConfig = useMemo(() => {
+    const statusStr = localStorage.getItem('status');
+    let status = {};
+    try {
+      status = statusStr ? JSON.parse(statusStr) : {};
+    } catch (e) {
+      status = {};
+    }
+    if (quotaDisplayType === 'CNY') {
+      const rate = parseFloat(
+        props.options?.USDExchangeRate || status?.usd_exchange_rate || '7.3',
+      );
+      return {
+        type: quotaDisplayType,
+        symbol: '¥',
+        rate: Number.isFinite(rate) && rate > 0 ? rate : 7.3,
+      };
+    }
+    if (quotaDisplayType === 'CUSTOM') {
+      const rate = parseFloat(
+        props.options?.['general_setting.custom_currency_exchange_rate'] ||
+          status?.custom_currency_exchange_rate ||
+          '1',
+      );
+      return {
+        type: quotaDisplayType,
+        symbol:
+          props.options?.['general_setting.custom_currency_symbol'] ||
+          status?.custom_currency_symbol ||
+          '¤',
+        rate: Number.isFinite(rate) && rate > 0 ? rate : 1,
+      };
+    }
+    return {
+      type: quotaDisplayType,
+      symbol: quotaDisplayType === 'TOKENS' ? '' : '$',
+      rate: 1,
+    };
+  }, [props.options, quotaDisplayType]);
+  const quotaInputUnit = useMemo(() => {
+    if (quotaDisplayType === 'TOKENS') return 'Token';
+    if (quotaDisplayType === 'USD') return 'USD';
+    if (quotaDisplayType === 'CNY') return 'CNY';
+    return t('自定义货币');
+  }, [quotaDisplayType, t]);
+
+  const quotaToDisplayAmount = (quota) => {
+    const q = Number(quota || 0);
+    if (!Number.isFinite(q) || q === 0) return 0;
+    if (quotaDisplayType === 'TOKENS') return q;
+    const usd = Math.abs(q) / quotaPerUnit;
+    const sign = Math.sign(q);
+    if (quotaDisplayType === 'USD') return sign * usd;
+    return sign * usd * currencyConfig.rate;
+  };
+
+  const displayAmountToQuota = (amount) => {
+    const value = Number(amount || 0);
+    if (!Number.isFinite(value) || value === 0) return 0;
+    if (quotaDisplayType === 'TOKENS') return Math.round(value);
+    const sign = Math.sign(value);
+    const abs = Math.abs(value);
+    const usd = quotaDisplayType === 'USD' ? abs : abs / currencyConfig.rate;
+    return sign * Math.round(usd * quotaPerUnit);
+  };
+
+  const quotaExtraText = (field, extraText = '') => {
+    const rawQuota = Number(inputs[field] || 0);
+    const rawText = t('等价原生额度：{{quota}} Token', {
+      quota: rawQuota.toLocaleString(),
+    });
+    return extraText ? `${extraText} · ${rawText}` : rawText;
+  };
+
+  const updateQuotaField = (field, amount) => {
+    const displayAmount = amount === '' || amount == null ? 0 : amount;
+    const quota = displayAmountToQuota(displayAmount);
+    setDisplayInputs((prev) => ({
+      ...prev,
+      [field]: displayAmount,
+    }));
+    setInputs((prev) => ({
+      ...prev,
+      [field]: String(quota),
+    }));
+  };
+
+  const renderQuotaAmountInput = ({ field, label, extraText, placeholder }) => (
+    <Form.Slot label={label} style={{ width: '100%' }}>
+      <InputNumber
+        value={displayInputs[field] ?? quotaToDisplayAmount(inputs[field])}
+        step={quotaDisplayType === 'TOKENS' ? 1 : 0.000001}
+        min={0}
+        precision={quotaDisplayType === 'TOKENS' ? 0 : 6}
+        prefix={
+          quotaDisplayType === 'TOKENS' ? undefined : currencyConfig.symbol
+        }
+        suffix={quotaDisplayType === 'TOKENS' ? 'Token' : quotaInputUnit}
+        placeholder={placeholder || ''}
+        style={{ width: '100%' }}
+        onChange={(value) => updateQuotaField(field, value)}
+      />
+      <Text
+        type='tertiary'
+        size='small'
+        style={{ display: 'block', marginTop: 4 }}
+      >
+        {quotaExtraText(field, extraText)}
+      </Text>
+    </Form.Slot>
+  );
 
   function onSubmit() {
     const updateArray = compareObjects(inputs, inputsRow);
@@ -88,7 +229,15 @@ export default function SettingsCreditLimit(props) {
     }
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
-    refForm.current.setValues(currentInputs);
+    setDisplayInputs(
+      QUOTA_FIELDS.reduce((acc, field) => {
+        acc[field] = Number(
+          quotaToDisplayAmount(currentInputs[field]).toFixed(6),
+        );
+        return acc;
+      }, {}),
+    );
+    refForm.current?.setValues(currentInputs);
   }, [props.options]);
   return (
     <>
@@ -111,77 +260,54 @@ export default function SettingsCreditLimit(props) {
           <Form.Section text={t('额度设置')}>
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.InputNumber
-                  label={t('新用户初始额度')}
-                  field={'QuotaForNewUser'}
-                  step={1}
-                  min={0}
-                  suffix={'Token'}
-                  placeholder={''}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForNewUser: String(value),
-                    })
-                  }
-                />
+                {renderQuotaAmountInput({
+                  field: 'QuotaForNewUser',
+                  label: t('新用户初始额度'),
+                })}
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.InputNumber
-                  label={t('请求预扣费额度')}
-                  field={'PreConsumedQuota'}
-                  step={1}
-                  min={0}
-                  suffix={'Token'}
-                  extraText={t('请求结束后多退少补')}
-                  placeholder={''}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      PreConsumedQuota: String(value),
-                    })
-                  }
-                />
+                {renderQuotaAmountInput({
+                  field: 'PreConsumedQuota',
+                  label: t('请求预扣费额度'),
+                  extraText: t('请求结束后多退少补'),
+                })}
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.InputNumber
-                  label={t('邀请新用户奖励额度')}
-                  field={'QuotaForInviter'}
-                  step={1}
-                  min={0}
-                  suffix={'Token'}
-                  extraText={
-                    !complianceConfirmed ? t('非零值需先确认合规声明') : ''
-                  }
-                  placeholder={t('例如：2000')}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForInviter: String(value),
-                    })
-                  }
-                />
+                {renderQuotaAmountInput({
+                  field: 'QuotaForInviter',
+                  label: t('邀请新用户奖励额度'),
+                  extraText: !complianceConfirmed
+                    ? t('非零值需先确认合规声明')
+                    : '',
+                  placeholder:
+                    quotaDisplayType === 'TOKENS'
+                      ? t('例如：2000')
+                      : t('例如：10'),
+                })}
               </Col>
             </Row>
             <Row>
               <Col xs={24} sm={12} md={8} lg={8} xl={6}>
-                <Form.InputNumber
-                  label={t('新用户使用邀请码奖励额度')}
-                  field={'QuotaForInvitee'}
-                  step={1}
-                  min={0}
-                  suffix={'Token'}
-                  extraText={
-                    !complianceConfirmed ? t('非零值需先确认合规声明') : ''
-                  }
-                  placeholder={t('例如：1000')}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForInvitee: String(value),
-                    })
-                  }
-                />
+                {renderQuotaAmountInput({
+                  field: 'QuotaForInvitee',
+                  label: t('新用户使用邀请码奖励额度'),
+                  extraText: !complianceConfirmed
+                    ? t('非零值需先确认合规声明')
+                    : '',
+                  placeholder:
+                    quotaDisplayType === 'TOKENS'
+                      ? t('例如：1000')
+                      : t('例如：5'),
+                })}
+              </Col>
+            </Row>
+            <Row>
+              <Col span={24}>
+                <Text type='tertiary' size='small'>
+                  {t('当前按 {{unit}} 输入，保存时自动换算为系统原生额度。', {
+                    unit: quotaInputUnit,
+                  })}
+                </Text>
               </Col>
             </Row>
             <Row>

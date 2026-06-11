@@ -1777,7 +1777,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "2025 年 5 月 10 日以降に追加されたチャネルの場合、デプロイ時にモデル名から「.」を削除する必要はありません",
     "For private deployments, format: https://fastgpt.run/api/openapi": "プライベートデプロイメントの場合、形式: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "構文的に有効な JSON 応答を強制",
@@ -4538,6 +4538,13 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Delete selected redemption codes": "選択した引換コードを削除",
+    "Delete {{count}} redemption code(s)?": "{{count}}件の引換コードを削除しますか？",
+    "You are about to delete {{count}} redemption code(s).": "{{count}}件の引換コードを削除しようとしています。",
+    "Successfully deleted {{count}} redemption code(s)": "{{count}}件の引換コードを削除しました",
+    "Failed to delete redemption codes": "引換コードの削除に失敗しました",
+    "Equivalent raw quota: {{quota}} Token": "等価の生クォータ：{{quota}} Token",
+    "Values are entered as {{unit}} and saved as raw quota.": "値は {{unit}} で入力され、生クォータとして保存されます。"
   }
 }

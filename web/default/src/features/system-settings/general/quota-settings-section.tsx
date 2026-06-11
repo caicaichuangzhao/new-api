@@ -16,11 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ChangeEvent } from 'react'
 import * as z from 'zod'
 import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
+import type { CurrencyDisplayType } from '@/stores/system-config-store'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Form,
@@ -62,25 +62,112 @@ const quotaSchema = z.object({
 })
 
 type QuotaFormValues = z.infer<typeof quotaSchema>
+type QuotaFieldName =
+  | 'QuotaForNewUser'
+  | 'PreConsumedQuota'
+  | 'QuotaForInviter'
+  | 'QuotaForInvitee'
+
+type QuotaCurrencyConfig = {
+  quotaDisplayType: CurrencyDisplayType
+  quotaPerUnit: number | string
+  usdExchangeRate: number | string
+  customCurrencySymbol: string
+  customCurrencyExchangeRate: number | string
+}
 
 type QuotaSettingsSectionProps = {
   defaultValues: QuotaFormValues
   complianceConfirmed?: boolean
+  currencyConfig: QuotaCurrencyConfig
+}
+
+function normalizePositiveNumber(value: number | string, fallback: number) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function getEffectiveCurrencyConfig(config: QuotaCurrencyConfig) {
+  return {
+    ...config,
+    quotaPerUnit: normalizePositiveNumber(config.quotaPerUnit, 500000),
+    usdExchangeRate: normalizePositiveNumber(config.usdExchangeRate, 1),
+    customCurrencyExchangeRate: normalizePositiveNumber(
+      config.customCurrencyExchangeRate,
+      1
+    ),
+    customCurrencySymbol: config.customCurrencySymbol?.trim() || '¤',
+  }
+}
+
+function quotaToDisplayAmount(quota: number, config: QuotaCurrencyConfig) {
+  const effective = getEffectiveCurrencyConfig(config)
+  if (!Number.isFinite(quota) || quota === 0) return 0
+  if (effective.quotaDisplayType === 'TOKENS') return quota
+
+  const usdAmount = Math.abs(quota) / effective.quotaPerUnit
+  const sign = Math.sign(quota)
+
+  if (effective.quotaDisplayType === 'USD') return sign * usdAmount
+  if (effective.quotaDisplayType === 'CNY') {
+    return sign * usdAmount * effective.usdExchangeRate
+  }
+
+  return sign * usdAmount * effective.customCurrencyExchangeRate
+}
+
+function displayAmountToQuota(amount: number, config: QuotaCurrencyConfig) {
+  const effective = getEffectiveCurrencyConfig(config)
+  if (!Number.isFinite(amount) || amount === 0) return 0
+  if (effective.quotaDisplayType === 'TOKENS') return Math.round(amount)
+
+  const sign = Math.sign(amount)
+  const absAmount = Math.abs(amount)
+  const usdAmount =
+    effective.quotaDisplayType === 'USD'
+      ? absAmount
+      : absAmount /
+        (effective.quotaDisplayType === 'CNY'
+          ? effective.usdExchangeRate
+          : effective.customCurrencyExchangeRate)
+
+  return sign * Math.round(usdAmount * effective.quotaPerUnit)
+}
+
+function getQuotaInputUnit(
+  config: QuotaCurrencyConfig,
+  t: (key: string) => string
+) {
+  const effective = getEffectiveCurrencyConfig(config)
+
+  switch (effective.quotaDisplayType) {
+    case 'TOKENS':
+      return t('Token')
+    case 'CNY':
+      return t('CNY')
+    case 'CUSTOM':
+      return effective.customCurrencySymbol
+    case 'USD':
+    default:
+      return t('USD')
+  }
+}
+
+function formatRawQuota(value: number | string | null | undefined) {
+  const raw = Number(value || 0)
+  return Number.isFinite(raw) ? raw.toLocaleString() : '0'
 }
 
 export function QuotaSettingsSection({
   defaultValues,
   complianceConfirmed = true,
+  currencyConfig,
 }: QuotaSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const handleNumberChange =
-    (onChange: (value: number | string) => void) =>
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onChange(
-        event.target.value === '' ? '' : event.currentTarget.valueAsNumber
-      )
-    }
+  const quotaInputUnit = getQuotaInputUnit(currencyConfig, t)
+  const quotaInputStep =
+    currencyConfig.quotaDisplayType === 'TOKENS' ? '1' : '0.000001'
 
   const { form, handleSubmit, isDirty, isSubmitting } =
     useSettingsForm<QuotaFormValues>({
@@ -99,6 +186,66 @@ export function QuotaSettingsSection({
         }
       },
     })
+
+  const renderQuotaField = (
+    name: QuotaFieldName,
+    label: string,
+    description: string
+  ) => (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => {
+        const displayValue = quotaToDisplayAmount(
+          Number(field.value || 0),
+          currencyConfig
+        )
+
+        return (
+          <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+              <div className='relative'>
+                <Input
+                  type='number'
+                  min={0}
+                  step={quotaInputStep}
+                  value={Number(displayValue.toFixed(6))}
+                  onChange={(event) => {
+                    if (event.target.value === '') {
+                      field.onChange(0)
+                      return
+                    }
+
+                    const next = event.currentTarget.valueAsNumber
+                    if (Number.isFinite(next)) {
+                      field.onChange(displayAmountToQuota(next, currencyConfig))
+                    }
+                  }}
+                  name={field.name}
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  className='pr-24'
+                />
+                <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs font-medium'>
+                  {quotaInputUnit}
+                </span>
+              </div>
+            </FormControl>
+            <FormDescription>
+              {description}
+              <span className='block'>
+                {t('Equivalent raw quota: {{quota}} Token', {
+                  quota: formatRawQuota(field.value),
+                })}
+              </span>
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )
+      }}
+    />
+  )
 
   return (
     <SettingsSection title={t('Quota Settings')}>
@@ -122,101 +269,37 @@ export function QuotaSettingsSection({
           />
           <FormDirtyIndicator isDirty={isDirty} />
           <SettingsFormGrid>
-            <FormField
-              control={form.control}
-              name='QuotaForNewUser'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('New User Quota')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Initial quota given to new users')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {renderQuotaField(
+              'QuotaForNewUser',
+              t('New User Quota'),
+              t('Initial quota given to new users')
+            )}
 
-            <FormField
-              control={form.control}
-              name='PreConsumedQuota'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Pre-Consumed Quota')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Quota consumed before charging users')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {renderQuotaField(
+              'PreConsumedQuota',
+              t('Pre-Consumed Quota'),
+              t('Quota consumed before charging users')
+            )}
 
-            <FormField
-              control={form.control}
-              name='QuotaForInviter'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Inviter Reward')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Quota given to users who invite others')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {renderQuotaField(
+              'QuotaForInviter',
+              t('Inviter Reward'),
+              t('Quota given to users who invite others')
+            )}
 
-            <FormField
-              control={form.control}
-              name='QuotaForInvitee'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Invitee Reward')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Quota given to invited users')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {renderQuotaField(
+              'QuotaForInvitee',
+              t('Invitee Reward'),
+              t('Quota given to invited users')
+            )}
+
+            <SettingsFormGridItem span='full'>
+              <p className='text-muted-foreground text-sm'>
+                {t('Values are entered as {{unit}} and saved as raw quota.', {
+                  unit: quotaInputUnit,
+                })}
+              </p>
+            </SettingsFormGridItem>
 
             <SettingsFormGridItem span='full'>
               <FormField
