@@ -107,11 +107,17 @@ func VideoProxy(c *gin.Context) {
 			return
 		}
 	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
-		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
-		req.Header.Set("Authorization", "Bearer "+channel.Key)
+		videoURL = getStoredTaskVideoURL(task)
+		if videoURL == "" {
+			videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
+			req.Header.Set("Authorization", "Bearer "+channel.Key)
+		}
 	default:
 		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
-		videoURL = task.GetResultURL()
+		videoURL = getStoredTaskVideoURL(task)
+		if videoURL == "" {
+			videoURL = task.GetResultURL()
+		}
 	}
 
 	videoURL = strings.TrimSpace(videoURL)
@@ -202,4 +208,65 @@ func writeVideoDataURL(c *gin.Context, dataURL string) error {
 	c.Writer.WriteHeader(http.StatusOK)
 	_, err = c.Writer.Write(videoBytes)
 	return err
+}
+
+func getStoredTaskVideoURL(task *model.Task) string {
+	if task == nil {
+		return ""
+	}
+	if url := strings.TrimSpace(task.GetResultURL()); url != "" && !isTaskProxyContentURL(url, task.TaskID) {
+		return url
+	}
+	if url := extractStoredVideoURLFromTaskData(task); url != "" && !isTaskProxyContentURL(url, task.TaskID) {
+		return url
+	}
+	return ""
+}
+
+func extractStoredVideoURLFromTaskData(task *model.Task) string {
+	if task == nil || len(task.Data) == 0 {
+		return ""
+	}
+	var payload any
+	if err := common.Unmarshal(task.Data, &payload); err != nil {
+		return ""
+	}
+	return extractStoredVideoURL(payload)
+}
+
+func extractStoredVideoURL(value any) string {
+	switch v := value.(type) {
+	case map[string]any:
+		for _, key := range []string{"url", "video_url", "videoUrl", "mp4_url", "mp4Url", "download_url", "downloadUrl", "object", "uri"} {
+			if url, ok := v[key].(string); ok && isUsableStoredVideoURL(url) {
+				return strings.TrimSpace(url)
+			}
+		}
+		for _, key := range []string{"metadata", "data", "result", "output", "response", "videos", "video", "content"} {
+			if url := extractStoredVideoURL(v[key]); url != "" {
+				return url
+			}
+		}
+		for _, item := range v {
+			if url := extractStoredVideoURL(item); url != "" {
+				return url
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if url := extractStoredVideoURL(item); url != "" {
+				return url
+			}
+		}
+	case string:
+		if isUsableStoredVideoURL(v) {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func isUsableStoredVideoURL(value string) bool {
+	url := strings.TrimSpace(value)
+	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "data:video")
 }
