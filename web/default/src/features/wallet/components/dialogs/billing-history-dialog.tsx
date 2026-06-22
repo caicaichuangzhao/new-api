@@ -57,11 +57,15 @@ import {
 interface BillingHistoryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  userId?: number
+  username?: string
 }
 
 export function BillingHistoryDialog({
   open,
   onOpenChange,
+  userId,
+  username,
 }: BillingHistoryDialogProps) {
   const { t } = useTranslation()
   const {
@@ -77,7 +81,7 @@ export function BillingHistoryDialog({
     handlePageSizeChange,
     handleSearch,
     handleCompleteOrder,
-  } = useBillingHistory()
+  } = useBillingHistory({ userId })
 
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
@@ -98,10 +102,18 @@ export function BillingHistoryDialog({
       <Dialog
         open={open}
         onOpenChange={onOpenChange}
-        title={t('Billing History')}
-        description={t(
-          'View your topup transaction records and payment history'
-        )}
+        title={
+          username
+            ? t('Billing History for {{username}}', { username })
+            : t('Billing History')
+        }
+        description={
+          userId
+            ? t(
+                "View this user's topup transaction records and payment history"
+              )
+            : t('View your topup transaction records and payment history')
+        }
         contentClassName='flex max-h-[calc(100dvh-2rem)] flex-col max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-4xl'
         contentHeight='auto'
         bodyClassName='space-y-3'

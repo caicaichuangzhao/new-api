@@ -30,6 +30,10 @@ import type {
   StripePaymentResponse,
   AffiliateCodeResponse,
   AffiliateTransferResponse,
+  AffiliateWithdrawalListResponse,
+  AffiliateWithdrawalRequest,
+  AffiliateWithdrawalResponse,
+  AffiliateWithdrawalReviewRequest,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -187,6 +191,82 @@ export async function transferAffiliateQuota(
 }
 
 /**
+ * Submit affiliate reward withdrawal request
+ */
+export async function createAffiliateWithdrawal(
+  request: AffiliateWithdrawalRequest
+): Promise<AffiliateWithdrawalResponse> {
+  const res = await api.post('/api/user/affiliate_withdrawal', request)
+  return res.data
+}
+
+/**
+ * Get current user's affiliate reward withdrawal records
+ */
+export async function getAffiliateWithdrawals(
+  page: number,
+  pageSize: number,
+  status?: string
+): Promise<AffiliateWithdrawalListResponse> {
+  const params = new URLSearchParams({
+    p: page.toString(),
+    page_size: pageSize.toString(),
+  })
+  if (status) {
+    params.append('status', status)
+  }
+  const res = await api.get(`/api/user/affiliate_withdrawal?${params}`)
+  return res.data
+}
+
+/**
+ * Cancel current user's pending affiliate withdrawal request
+ */
+export async function cancelAffiliateWithdrawal(
+  id: number
+): Promise<ApiResponse> {
+  const res = await api.post(`/api/user/affiliate_withdrawal/${id}/cancel`)
+  return res.data
+}
+
+/**
+ * Get affiliate withdrawal requests for admin review
+ */
+export async function getAdminAffiliateWithdrawals(params: {
+  page: number
+  pageSize: number
+  status?: string
+  userId?: string | number
+}): Promise<AffiliateWithdrawalListResponse> {
+  const query = new URLSearchParams({
+    p: params.page.toString(),
+    page_size: params.pageSize.toString(),
+  })
+  if (params.status) {
+    query.append('status', params.status)
+  }
+  if (params.userId) {
+    query.append('user_id', String(params.userId))
+  }
+  const res = await api.get(`/api/user/affiliate_withdrawal/admin?${query}`)
+  return res.data
+}
+
+/**
+ * Review an affiliate withdrawal request
+ */
+export async function reviewAffiliateWithdrawal(
+  id: number,
+  request: AffiliateWithdrawalReviewRequest
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/user/affiliate_withdrawal/admin/${id}/review`,
+    request
+  )
+  return res.data
+}
+
+/**
  * Get billing history for current user
  */
 export async function getUserBillingHistory(
@@ -211,7 +291,8 @@ export async function getUserBillingHistory(
 export async function getAllBillingHistory(
   page: number,
   pageSize: number,
-  keyword?: string
+  keyword?: string,
+  filters: { userId?: number } = {}
 ): Promise<ApiResponse<BillingHistoryResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -219,6 +300,9 @@ export async function getAllBillingHistory(
   })
   if (keyword) {
     params.append('keyword', keyword)
+  }
+  if (filters.userId) {
+    params.append('user_id', String(filters.userId))
   }
   const res = await api.get(`/api/user/topup?${params.toString()}`)
   return res.data

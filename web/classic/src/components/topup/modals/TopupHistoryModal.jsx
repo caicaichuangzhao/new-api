@@ -52,11 +52,12 @@ const PAYMENT_METHOD_MAP = {
   stripe: 'Stripe',
   creem: 'Creem',
   waffo: 'Waffo',
+  waffo_pancake: 'Waffo Pancake',
   alipay: '支付宝',
   wxpay: '微信',
 };
 
-const TopupHistoryModal = ({ visible, onCancel, t }) => {
+const TopupHistoryModal = ({ visible, onCancel, t, userId, username }) => {
   const [loading, setLoading] = useState(false);
   const [topups, setTopups] = useState([]);
   const [total, setTotal] = useState(0);
@@ -71,7 +72,8 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       const base = isAdmin() ? '/api/user/topup' : '/api/user/topup/self';
       const qs =
         `p=${currentPage}&page_size=${currentPageSize}` +
-        (keyword ? `&keyword=${encodeURIComponent(keyword)}` : '');
+        (keyword ? `&keyword=${encodeURIComponent(keyword)}` : '') +
+        (userId ? `&user_id=${encodeURIComponent(userId)}` : '');
       const endpoint = `${base}?${qs}`;
       const res = await API.get(endpoint);
       const { success, message, data } = res.data;
@@ -92,7 +94,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
     if (visible) {
       loadTopups(page, pageSize);
     }
-  }, [visible, page, pageSize, keyword]);
+  }, [visible, page, pageSize, keyword, userId]);
 
   const handlePageChange = (currentPage) => {
     setPage(currentPage);
@@ -227,14 +229,14 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
           if (record.status === 'pending') {
             actions.push(
               <Button
-                key="complete"
+                key='complete'
                 size='small'
                 type='primary'
                 theme='outline'
                 onClick={() => confirmAdminComplete(record.trade_no)}
               >
                 {t('补单')}
-              </Button>
+              </Button>,
             );
           }
           return actions.length > 0 ? <>{actions}</> : null;
@@ -254,7 +256,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
 
   return (
     <Modal
-      title={t('充值账单')}
+      title={username ? `${t('充值账单')} · ${username}` : t('充值账单')}
       visible={visible}
       onCancel={onCancel}
       footer={null}

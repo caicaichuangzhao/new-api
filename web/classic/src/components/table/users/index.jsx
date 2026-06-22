@@ -25,6 +25,7 @@ import UsersFilters from './UsersFilters';
 import UsersDescription from './UsersDescription';
 import AddUserModal from './modals/AddUserModal';
 import EditUserModal from './modals/EditUserModal';
+import AffiliateWithdrawalsAdminModal from './modals/AffiliateWithdrawalsAdminModal';
 import { useUsersData } from '../../../hooks/users/useUsersData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -61,6 +62,7 @@ const UsersPage = () => {
     // Translation
     t,
   } = usersData;
+  const [showWithdrawals, setShowWithdrawals] = React.useState(false);
 
   return (
     <>
@@ -77,6 +79,12 @@ const UsersPage = () => {
         editingUser={editingUser}
       />
 
+      <AffiliateWithdrawalsAdminModal
+        visible={showWithdrawals}
+        onCancel={() => setShowWithdrawals(false)}
+        t={t}
+      />
+
       <CardPro
         type='type1'
         descriptionArea={
@@ -88,7 +96,11 @@ const UsersPage = () => {
         }
         actionsArea={
           <div className='flex flex-col md:flex-row justify-between items-center gap-2 w-full'>
-            <UsersActions setShowAddUser={setShowAddUser} t={t} />
+            <UsersActions
+              setShowAddUser={setShowAddUser}
+              setShowWithdrawals={setShowWithdrawals}
+              t={t}
+            />
 
             <UsersFilters
               formInitValues={formInitValues}

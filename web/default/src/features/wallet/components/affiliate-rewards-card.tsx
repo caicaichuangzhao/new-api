@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Share2 } from 'lucide-react'
+import { ArrowRightLeft, ListChecks, Share2, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatQuota } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,8 @@ interface AffiliateRewardsCardProps {
   user: UserWalletData | null
   affiliateLink: string
   onTransfer: () => void
+  onWithdraw: () => void
+  onViewWithdrawals: () => void
   complianceConfirmed?: boolean
   loading?: boolean
 }
@@ -38,6 +40,8 @@ export function AffiliateRewardsCard({
   user,
   affiliateLink,
   onTransfer,
+  onWithdraw,
+  onViewWithdrawals,
   complianceConfirmed = true,
   loading,
 }: AffiliateRewardsCardProps) {
@@ -61,7 +65,7 @@ export function AffiliateRewardsCard({
 
   return (
     <Card className='bg-muted/20 py-0'>
-      <CardContent className='grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(200px,1fr)_minmax(180px,0.65fr)_minmax(280px,1fr)] lg:items-center'>
+      <CardContent className='grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(200px,1fr)_minmax(180px,0.65fr)_minmax(340px,1.15fr)] lg:items-center'>
         <div className='flex min-w-0 items-center gap-2.5'>
           <div className='bg-background flex size-8 shrink-0 items-center justify-center rounded-lg border'>
             <Share2 className='text-muted-foreground size-4' />
@@ -95,30 +99,54 @@ export function AffiliateRewardsCard({
           ))}
         </div>
 
-        <div className='flex items-center gap-2'>
+        <div className='flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center'>
           <Input
             value={affiliateLink}
             readOnly
             className='border-muted bg-background/70 h-9 min-w-0 flex-1 font-mono text-xs'
           />
-          <CopyButton
-            value={affiliateLink}
-            variant='outline'
-            className='bg-background size-9 shrink-0'
-            iconClassName='size-4'
-            tooltip={t('Copy referral link')}
-            aria-label={t('Copy referral link')}
-          />
-          {hasRewards && (
+          <div className='flex shrink-0 flex-wrap items-center gap-2'>
+            <CopyButton
+              value={affiliateLink}
+              variant='outline'
+              className='bg-background size-9 shrink-0'
+              iconClassName='size-4'
+              tooltip={t('Copy referral link')}
+              aria-label={t('Copy referral link')}
+            />
+            {hasRewards && (
+              <Button
+                onClick={onTransfer}
+                disabled={!complianceConfirmed}
+                className='h-9 shrink-0 px-3'
+                size='sm'
+                variant='outline'
+              >
+                <ArrowRightLeft />
+                {t('Transfer')}
+              </Button>
+            )}
+            {hasRewards && (
+              <Button
+                onClick={onWithdraw}
+                disabled={!complianceConfirmed}
+                className='h-9 shrink-0 px-3'
+                size='sm'
+              >
+                <WalletCards />
+                {t('Withdraw')}
+              </Button>
+            )}
             <Button
-              onClick={onTransfer}
-              disabled={!complianceConfirmed}
+              onClick={onViewWithdrawals}
               className='h-9 shrink-0 px-3'
               size='sm'
+              variant='outline'
             >
-              {t('Transfer to Balance')}
+              <ListChecks />
+              {t('Records')}
             </Button>
-          )}
+          </div>
         </div>
         {!complianceConfirmed ? (
           <p className='text-muted-foreground text-xs lg:col-span-3'>

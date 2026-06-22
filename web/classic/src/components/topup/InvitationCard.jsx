@@ -27,7 +27,16 @@ import {
   Badge,
   Space,
 } from '@douyinfe/semi-ui';
-import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
+import {
+  Copy,
+  Users,
+  BarChart2,
+  TrendingUp,
+  Gift,
+  Zap,
+  WalletCards,
+  ListChecks,
+} from 'lucide-react';
 
 const { Text } = Typography;
 
@@ -36,6 +45,8 @@ const InvitationCard = ({
   userState,
   renderQuota,
   setOpenTransfer,
+  setOpenWithdrawal,
+  setOpenWithdrawalRecords,
   affLink,
   handleAffLinkClick,
   complianceConfirmed = true,
@@ -77,21 +88,48 @@ const InvitationCard = ({
                   <Text strong style={{ color: 'white', fontSize: '16px' }}>
                     {t('收益统计')}
                   </Text>
-                  <Button
-                    type='primary'
-                    theme='solid'
-                    size='small'
-                    disabled={
-                      !complianceConfirmed ||
-                      !userState?.user?.aff_quota ||
-                      userState?.user?.aff_quota <= 0
-                    }
-                    onClick={() => setOpenTransfer(true)}
-                    className='!rounded-lg'
-                  >
-                    <Zap size={12} className='mr-1' />
-                    {t('划转到余额')}
-                  </Button>
+                  <div className='flex flex-wrap justify-end gap-2'>
+                    <Button
+                      type='primary'
+                      theme='solid'
+                      size='small'
+                      disabled={
+                        !complianceConfirmed ||
+                        !userState?.user?.aff_quota ||
+                        userState?.user?.aff_quota <= 0
+                      }
+                      onClick={() => setOpenTransfer(true)}
+                      className='!rounded-lg'
+                    >
+                      <Zap size={12} className='mr-1' />
+                      {t('划转')}
+                    </Button>
+                    <Button
+                      type='primary'
+                      theme='light'
+                      size='small'
+                      disabled={
+                        !complianceConfirmed ||
+                        !userState?.user?.aff_quota ||
+                        userState?.user?.aff_quota <= 0
+                      }
+                      onClick={() => setOpenWithdrawal(true)}
+                      className='!rounded-lg'
+                    >
+                      <WalletCards size={12} className='mr-1' />
+                      {t('提现')}
+                    </Button>
+                    <Button
+                      type='tertiary'
+                      theme='light'
+                      size='small'
+                      onClick={() => setOpenWithdrawalRecords(true)}
+                      className='!rounded-lg'
+                    >
+                      <ListChecks size={12} className='mr-1' />
+                      {t('记录')}
+                    </Button>
+                  </div>
                 </div>
                 {!complianceConfirmed && (
                   <Text

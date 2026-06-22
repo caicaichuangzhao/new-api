@@ -44,7 +44,6 @@ const QUOTA_FIELDS = [
   'QuotaForInviter',
   'QuotaForInvitee',
 ];
-
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -53,6 +52,8 @@ export default function SettingsCreditLimit(props) {
     PreConsumedQuota: '',
     QuotaForInviter: '',
     QuotaForInvitee: '',
+    AffFirstTopUpRewardRatio: 0,
+    AffConsumptionRewardRatio: 0,
     'quota_setting.enable_free_model_pre_consume': true,
   });
   const [displayInputs, setDisplayInputs] = useState({});
@@ -185,6 +186,35 @@ export default function SettingsCreditLimit(props) {
     </Form.Slot>
   );
 
+  const renderRatioInput = ({ field, label, extraText, placeholder }) => (
+    <Form.Slot label={label} style={{ width: '100%' }}>
+      <InputNumber
+        value={Number(inputs[field] || 0)}
+        min={0}
+        step={0.1}
+        precision={4}
+        suffix='%'
+        placeholder={placeholder || '0'}
+        style={{ width: '100%' }}
+        onChange={(value) =>
+          setInputs((prev) => ({
+            ...prev,
+            [field]: value === '' || value == null ? 0 : value,
+          }))
+        }
+      />
+      {extraText && (
+        <Text
+          type='tertiary'
+          size='small'
+          style={{ display: 'block', marginTop: 4 }}
+        >
+          {extraText}
+        </Text>
+      )}
+    </Form.Slot>
+  );
+
   function onSubmit() {
     const updateArray = compareObjects(inputs, inputsRow);
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
@@ -298,6 +328,24 @@ export default function SettingsCreditLimit(props) {
                     quotaDisplayType === 'TOKENS'
                       ? t('例如：1000')
                       : t('例如：5'),
+                })}
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                {renderRatioInput({
+                  field: 'AffFirstTopUpRewardRatio',
+                  label: t('邀请用户首次充值返点比例'),
+                  extraText: t('按被邀请用户首次成功充值入账额度计算'),
+                  placeholder: t('例如：10'),
+                })}
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                {renderRatioInput({
+                  field: 'AffConsumptionRewardRatio',
+                  label: t('邀请用户后续消费返现比例'),
+                  extraText: t('按被邀请用户每次实际消费额度计算'),
+                  placeholder: t('例如：1'),
                 })}
               </Col>
             </Row>

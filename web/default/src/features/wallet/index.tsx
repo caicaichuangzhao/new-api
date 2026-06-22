@@ -18,11 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { getSelf } from '@/lib/api'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { SectionPageLayout } from '@/components/layout'
+import { createAffiliateWithdrawal, isApiSuccess } from './api'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
+import { AffiliateWithdrawalDialog } from './components/dialogs/affiliate-withdrawal-dialog'
+import { AffiliateWithdrawalRecordsDialog } from './components/dialogs/affiliate-withdrawal-records-dialog'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
@@ -50,6 +54,7 @@ import type {
   PaymentMethod,
   PresetAmount,
   CreemProduct,
+  AffiliateWithdrawalRequest,
 } from './types'
 
 interface WalletProps {
@@ -67,12 +72,16 @@ export function Wallet(props: WalletProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false)
+  const [withdrawalRecordsDialogOpen, setWithdrawalRecordsDialogOpen] =
+    useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
   const [creemDialogOpen, setCreemDialogOpen] = useState(false)
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
+  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false)
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -216,6 +225,25 @@ export function Wallet(props: WalletProps) {
     return success
   }
 
+  const handleWithdrawal = async (payload: AffiliateWithdrawalRequest) => {
+    setWithdrawalSubmitting(true)
+    try {
+      const response = await createAffiliateWithdrawal(payload)
+      if (isApiSuccess(response)) {
+        toast.success(t('Withdrawal request submitted'))
+        await fetchUser()
+        return true
+      }
+      toast.error(response.message || t('Failed to submit withdrawal request'))
+      return false
+    } catch (_error) {
+      toast.error(t('Failed to submit withdrawal request'))
+      return false
+    } finally {
+      setWithdrawalSubmitting(false)
+    }
+  }
+
   // Handle Creem product selection
   const handleCreemProductSelect = (product: CreemProduct) => {
     setSelectedCreemProduct(product)
@@ -318,6 +346,8 @@ export function Wallet(props: WalletProps) {
               user={user}
               affiliateLink={affiliateLink}
               onTransfer={() => setTransferDialogOpen(true)}
+              onWithdraw={() => setWithdrawalDialogOpen(true)}
+              onViewWithdrawals={() => setWithdrawalRecordsDialogOpen(true)}
               complianceConfirmed={
                 topupInfo?.payment_compliance_confirmed !== false
               }
@@ -346,6 +376,20 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleTransfer}
         availableQuota={user?.aff_quota ?? 0}
         transferring={transferring}
+      />
+
+      <AffiliateWithdrawalDialog
+        open={withdrawalDialogOpen}
+        onOpenChange={setWithdrawalDialogOpen}
+        onConfirm={handleWithdrawal}
+        availableQuota={user?.aff_quota ?? 0}
+        submitting={withdrawalSubmitting}
+      />
+
+      <AffiliateWithdrawalRecordsDialog
+        open={withdrawalRecordsDialogOpen}
+        onOpenChange={setWithdrawalRecordsDialogOpen}
+        onChanged={fetchUser}
       />
 
       <BillingHistoryDialog

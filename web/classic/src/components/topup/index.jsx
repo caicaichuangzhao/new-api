@@ -39,6 +39,8 @@ import InvitationCard from './InvitationCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
+import AffiliateWithdrawalModal from './modals/AffiliateWithdrawalModal';
+import AffiliateWithdrawalRecordsModal from './modals/AffiliateWithdrawalRecordsModal';
 
 // Reject non-navigable schemes (e.g. javascript:, data:) and relative URLs.
 // Only http / https are allowed for backend-provided redirect targets.
@@ -107,6 +109,9 @@ const TopUp = () => {
   const [affLink, setAffLink] = useState('');
   const [openTransfer, setOpenTransfer] = useState(false);
   const [transferAmount, setTransferAmount] = useState(0);
+  const [openWithdrawal, setOpenWithdrawal] = useState(false);
+  const [openWithdrawalRecords, setOpenWithdrawalRecords] = useState(false);
+  const [withdrawalLoading, setWithdrawalLoading] = useState(false);
 
   // 账单Modal状态
   const [openHistory, setOpenHistory] = useState(false);
@@ -755,6 +760,33 @@ const TopUp = () => {
     }
   };
 
+  const submitAffiliateWithdrawal = async (payload) => {
+    if (!payload.alipay_name || !payload.alipay_account) {
+      showError(t('请填写支付宝收款信息'));
+      return;
+    }
+    if (payload.quota < getQuotaPerUnit()) {
+      showError(t('提现额度最低为') + ' ' + renderQuota(getQuotaPerUnit()));
+      return;
+    }
+    setWithdrawalLoading(true);
+    try {
+      const res = await API.post('/api/user/affiliate_withdrawal', payload);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('提现申请已提交'));
+        setOpenWithdrawal(false);
+        getUserQuota().then();
+      } else {
+        showError(message);
+      }
+    } catch (e) {
+      showError(t('提交失败'));
+    } finally {
+      setWithdrawalLoading(false);
+    }
+  };
+
   // 复制邀请链接
   const handleAffLinkClick = async () => {
     await copy(affLink);
@@ -917,6 +949,24 @@ const TopUp = () => {
         setTransferAmount={setTransferAmount}
       />
 
+      <AffiliateWithdrawalModal
+        t={t}
+        visible={openWithdrawal}
+        onCancel={() => setOpenWithdrawal(false)}
+        onSubmit={submitAffiliateWithdrawal}
+        userState={userState}
+        renderQuota={renderQuota}
+        getQuotaPerUnit={getQuotaPerUnit}
+        loading={withdrawalLoading}
+      />
+
+      <AffiliateWithdrawalRecordsModal
+        t={t}
+        visible={openWithdrawalRecords}
+        onCancel={() => setOpenWithdrawalRecords(false)}
+        onChanged={() => getUserQuota().then()}
+      />
+
       {/* 充值确认模态框 */}
       <PaymentConfirmModal
         t={t}
@@ -1022,6 +1072,8 @@ const TopUp = () => {
           userState={userState}
           renderQuota={renderQuota}
           setOpenTransfer={setOpenTransfer}
+          setOpenWithdrawal={setOpenWithdrawal}
+          setOpenWithdrawalRecords={setOpenWithdrawalRecords}
           affLink={affLink}
           handleAffLinkClick={handleAffLinkClick}
           complianceConfirmed={topupInfo.payment_compliance_confirmed !== false}

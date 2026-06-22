@@ -41,6 +41,9 @@ export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
+export type AffiliateWithdrawalResponse = ApiResponse<AffiliateWithdrawalRecord>
+export type AffiliateWithdrawalListResponse =
+  ApiResponse<AffiliateWithdrawalList>
 export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
 export type WaffoPaymentResponse = ApiResponse<
   { payment_url?: string } | string
@@ -218,6 +221,44 @@ export interface AmountRequest {
 export interface AffiliateTransferRequest {
   /** Quota amount to transfer */
   quota: number
+}
+
+export type AffiliateWithdrawalStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+
+export interface AffiliateWithdrawalRecord {
+  id: number
+  user_id: number
+  username?: string
+  alipay_name: string
+  alipay_account: string
+  quota: number
+  status: AffiliateWithdrawalStatus
+  reject_reason?: string
+  reviewer_id?: number
+  reviewer_name?: string
+  reviewed_at?: number
+  created_at: number
+  updated_at?: number
+}
+
+export interface AffiliateWithdrawalList {
+  items: AffiliateWithdrawalRecord[]
+  total: number
+}
+
+export interface AffiliateWithdrawalRequest {
+  alipay_name: string
+  alipay_account: string
+  quota: number
+}
+
+export interface AffiliateWithdrawalReviewRequest {
+  approved: boolean
+  reject_reason?: string
 }
 
 /**

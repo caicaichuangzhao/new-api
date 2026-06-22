@@ -52,6 +52,8 @@ const quotaSchema = z.object({
   PreConsumedQuota: z.coerce.number().min(0),
   QuotaForInviter: z.coerce.number().min(0),
   QuotaForInvitee: z.coerce.number().min(0),
+  AffFirstTopUpRewardRatio: z.coerce.number().min(0),
+  AffConsumptionRewardRatio: z.coerce.number().min(0),
   TopUpLink: z.string(),
   general_setting: z.object({
     docs_link: z.string(),
@@ -67,6 +69,8 @@ type QuotaFieldName =
   | 'PreConsumedQuota'
   | 'QuotaForInviter'
   | 'QuotaForInvitee'
+
+type PercentFieldName = 'AffFirstTopUpRewardRatio' | 'AffConsumptionRewardRatio'
 
 type QuotaCurrencyConfig = {
   quotaDisplayType: CurrencyDisplayType
@@ -247,6 +251,51 @@ export function QuotaSettingsSection({
     />
   )
 
+  const renderPercentField = (
+    name: PercentFieldName,
+    label: string,
+    description: string
+  ) => (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <div className='relative'>
+              <Input
+                type='number'
+                min={0}
+                step='0.01'
+                value={field.value ?? 0}
+                onChange={(event) => {
+                  if (event.target.value === '') {
+                    field.onChange(0)
+                    return
+                  }
+                  const next = event.currentTarget.valueAsNumber
+                  if (Number.isFinite(next)) {
+                    field.onChange(next)
+                  }
+                }}
+                name={field.name}
+                onBlur={field.onBlur}
+                ref={field.ref}
+                className='pr-10'
+              />
+              <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs font-medium'>
+                %
+              </span>
+            </div>
+          </FormControl>
+          <FormDescription>{description}</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+
   return (
     <SettingsSection title={t('Quota Settings')}>
       <FormNavigationGuard when={isDirty} />
@@ -291,6 +340,22 @@ export function QuotaSettingsSection({
               'QuotaForInvitee',
               t('Invitee Reward'),
               t('Quota given to invited users')
+            )}
+
+            {renderPercentField(
+              'AffFirstTopUpRewardRatio',
+              t('First Top-Up Referral Rebate'),
+              t(
+                "Calculated from the credited quota of an invited user's first successful top-up."
+              )
+            )}
+
+            {renderPercentField(
+              'AffConsumptionRewardRatio',
+              t('Referral Consumption Cashback'),
+              t(
+                'Calculated from each settled quota consumption by invited users.'
+              )
             )}
 
             <SettingsFormGridItem span='full'>

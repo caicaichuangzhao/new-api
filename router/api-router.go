@@ -106,6 +106,9 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo-pancake/amount", controller.RequestWaffoPancakeAmount)
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
+				selfRoute.GET("/affiliate_withdrawal", controller.GetSelfAffiliateWithdrawals)
+				selfRoute.POST("/affiliate_withdrawal", controller.CreateAffiliateWithdrawal)
+				selfRoute.POST("/affiliate_withdrawal/:id/cancel", controller.CancelAffiliateWithdrawal)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
 				// 2FA routes
@@ -130,6 +133,8 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/", controller.GetAllUsers)
 				adminRoute.GET("/topup", controller.GetAllTopUps)
 				adminRoute.POST("/topup/complete", controller.AdminCompleteTopUp)
+				adminRoute.GET("/affiliate_withdrawal/admin", controller.AdminGetAffiliateWithdrawals)
+				adminRoute.POST("/affiliate_withdrawal/admin/:id/review", controller.AdminReviewAffiliateWithdrawal)
 				adminRoute.GET("/search", controller.SearchUsers)
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)

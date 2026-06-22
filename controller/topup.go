@@ -403,6 +403,9 @@ func EpayNotify(c *gin.Context) {
 				logger.LogError(c.Request.Context(), fmt.Sprintf("易支付 更新用户额度失败 trade_no=%s user_id=%d client_ip=%s quota_to_add=%d error=%q topup=%q", topUp.TradeNo, topUp.UserId, c.ClientIP(), quotaToAdd, err.Error(), common.GetJsonString(topUp)))
 				return
 			}
+			if _, _, rewardErr := model.GrantAffiliateFirstTopUpReward(topUp, quotaToAdd); rewardErr != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("易支付 首次充值返佣失败 trade_no=%s user_id=%d error=%q", topUp.TradeNo, topUp.UserId, rewardErr.Error()))
+			}
 			logger.LogInfo(c.Request.Context(), fmt.Sprintf("易支付 充值成功 trade_no=%s user_id=%d client_ip=%s quota_to_add=%d money=%.2f topup=%q", topUp.TradeNo, topUp.UserId, c.ClientIP(), quotaToAdd, topUp.Money, common.GetJsonString(topUp)))
 			model.RecordTopupLog(topUp.UserId, fmt.Sprintf("使用在线充值成功，充值金额: %v，支付金额：%f", logger.LogQuota(quotaToAdd), topUp.Money), c.ClientIP(), topUp.PaymentMethod, "epay")
 		}
@@ -465,18 +468,29 @@ func GetUserTopUps(c *gin.Context) {
 // GetAllTopUps 管理员获取全平台充值记录
 func GetAllTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
+	filter := model.TopUpFilter{
+		Keyword:         c.Query("keyword"),
+		Username:        c.Query("username"),
+		Status:          c.Query("status"),
+		PaymentMethod:   c.Query("payment_method"),
+		PaymentProvider: c.Query("payment_provider"),
+	}
+	if userId, err := strconv.Atoi(c.Query("user_id")); err == nil && userId > 0 {
+		filter.UserId = userId
+	}
+	if startTime, err := strconv.ParseInt(c.Query("start_time"), 10, 64); err == nil && startTime > 0 {
+		filter.StartTime = startTime
+	}
+	if endTime, err := strconv.ParseInt(c.Query("end_time"), 10, 64); err == nil && endTime > 0 {
+		filter.EndTime = endTime
+	}
 
 	var (
 		topups []*model.TopUp
 		total  int64
 		err    error
 	)
-	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo)
-	}
+	topups, total, err = model.QueryAllTopUps(filter, pageInfo)
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -65,6 +66,7 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			} else {
 				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
 			}
+			grantAffiliateConsumptionReward(ctx, relayInfo, actualQuota)
 		}
 		return nil
 	}
@@ -72,7 +74,19 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 	// 回退：无 BillingSession 时使用旧路径
 	quotaDelta := actualQuota - relayInfo.FinalPreConsumedQuota
 	if quotaDelta != 0 {
-		return PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true)
+		if err := PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true); err != nil {
+			return err
+		}
 	}
+	grantAffiliateConsumptionReward(ctx, relayInfo, actualQuota)
 	return nil
+}
+
+func grantAffiliateConsumptionReward(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) {
+	if relayInfo == nil || actualQuota <= 0 {
+		return
+	}
+	if _, _, err := model.GrantAffiliateConsumptionReward(relayInfo.UserId, actualQuota, relayInfo.RequestId); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("邀请用户消费返现失败 user_id=%d request_id=%s quota=%d error=%q", relayInfo.UserId, relayInfo.RequestId, actualQuota, err.Error()))
+	}
 }
