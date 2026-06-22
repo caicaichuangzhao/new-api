@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useMemo } from 'react'
 import {
   Activity,
   Box,
@@ -26,6 +27,7 @@ import {
   LayoutDashboard,
   ListTodo,
   MessageSquare,
+  PenLine,
   Radio,
   Settings,
   Ticket,
@@ -34,6 +36,11 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  buildExternalSiteHref,
+  normalizeCustomNavigationLinks,
+} from '@/lib/custom-navigation'
+import { useStatus } from '@/hooks/use-status'
 import { type SidebarData } from '@/components/layout/types'
 
 /**
@@ -44,6 +51,22 @@ import { type SidebarData } from '@/components/layout/types'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const consoleCustomLinks = useMemo(() => {
+    try {
+      const raw = status?.SidebarModulesAdmin
+      if (!raw || typeof raw !== 'string') return []
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const consoleConfig = parsed.console as
+        | Record<string, unknown>
+        | undefined
+      return normalizeCustomNavigationLinks(consoleConfig?.customItems).filter(
+        (link) => link.enabled
+      )
+    } catch {
+      return []
+    }
+  }, [status?.SidebarModulesAdmin])
 
   return {
     navGroups: [
@@ -60,6 +83,11 @@ export function useSidebarData(): SidebarData {
             title: t('Chat'),
             icon: MessageSquare,
             type: 'chat-presets',
+          },
+          {
+            title: t('Chatroom'),
+            url: '/chatroom',
+            icon: MessageSquare,
           },
         ],
       },
@@ -94,6 +122,18 @@ export function useSidebarData(): SidebarData {
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
           },
+          {
+            title: t('Infinite Canvas'),
+            url: '/infinite-canvas',
+            icon: PenLine,
+          },
+          ...consoleCustomLinks.map((link) => ({
+            title: link.title,
+            url: buildExternalSiteHref(link),
+            configUrls: ['/external-site'],
+            reload: true,
+            icon: Radio,
+          })),
         ],
       },
       {

@@ -17,9 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useContext,
+  useRef,
+  useCallback,
+} from 'react';
 import { StatusContext } from '../../context/Status';
 import { API } from '../../helpers';
+import { normalizeCustomNavigationLinks } from '../../helpers/customNavigation';
 
 // 创建一个全局事件系统来同步所有useSidebar实例
 const sidebarEventTarget = new EventTarget();
@@ -30,6 +38,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     enabled: true,
     playground: true,
     chat: true,
+    chatroom: false,
   },
   console: {
     enabled: true,
@@ -38,6 +47,8 @@ export const DEFAULT_ADMIN_CONFIG = {
     log: true,
     midjourney: true,
     task: true,
+    infinite_canvas: true,
+    customItems: [],
   },
   personal: {
     enabled: true,
@@ -57,6 +68,8 @@ export const DEFAULT_ADMIN_CONFIG = {
 };
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
+const isModuleConfigKey = (key) => key !== 'enabled' && key !== 'customItems';
 
 export const mergeAdminConfig = (savedConfig) => {
   const merged = deepClone(DEFAULT_ADMIN_CONFIG);
@@ -133,8 +146,8 @@ export const useSidebar = () => {
             // 为每个管理员允许的模块设置默认值为true
             Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
               if (
-                moduleKey !== 'enabled' &&
-                adminConfig[sectionKey][moduleKey]
+                isModuleConfigKey(moduleKey) &&
+                adminConfig[sectionKey][moduleKey] === true
               ) {
                 defaultUserConfig[sectionKey][moduleKey] = true;
               }
@@ -150,7 +163,10 @@ export const useSidebar = () => {
         if (adminConfig[sectionKey]?.enabled) {
           defaultUserConfig[sectionKey] = { enabled: true };
           Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
-            if (moduleKey !== 'enabled' && adminConfig[sectionKey][moduleKey]) {
+            if (
+              isModuleConfigKey(moduleKey) &&
+              adminConfig[sectionKey][moduleKey] === true
+            ) {
               defaultUserConfig[sectionKey][moduleKey] = true;
             }
           });
@@ -243,7 +259,7 @@ export const useSidebar = () => {
 
       // 功能级别：只有管理员和用户都允许的功能才显示
       Object.keys(adminSection).forEach((moduleKey) => {
-        if (moduleKey === 'enabled') return;
+        if (!isModuleConfigKey(moduleKey)) return;
 
         const adminAllowed = adminSection[moduleKey];
         // 当userSection存在时检查模块状态，否则默认为true
@@ -268,13 +284,27 @@ export const useSidebar = () => {
     }
   };
 
+  const getVisibleCustomItems = useCallback(
+    (sectionKey) => {
+      if (sectionKey !== 'console') return [];
+      if (finalConfig[sectionKey]?.enabled !== true) return [];
+
+      return normalizeCustomNavigationLinks(
+        adminConfig.console?.customItems,
+      ).filter((item) => item.enabled);
+    },
+    [adminConfig, finalConfig],
+  );
+
   // 检查区域是否有任何可见的功能
   const hasSectionVisibleModules = (sectionKey) => {
     const section = finalConfig[sectionKey];
     if (!section?.enabled) return false;
 
-    return Object.keys(section).some(
-      (key) => key !== 'enabled' && section[key] === true,
+    return (
+      Object.keys(section).some(
+        (key) => isModuleConfigKey(key) && section[key] === true,
+      ) || getVisibleCustomItems(sectionKey).length > 0
     );
   };
 
@@ -284,7 +314,7 @@ export const useSidebar = () => {
     if (!section?.enabled) return [];
 
     return Object.keys(section).filter(
-      (key) => key !== 'enabled' && section[key] === true,
+      (key) => isModuleConfigKey(key) && section[key] === true,
     );
   };
 
@@ -296,6 +326,7 @@ export const useSidebar = () => {
     isModuleVisible,
     hasSectionVisibleModules,
     getVisibleModules,
+    getVisibleCustomItems,
     refreshUserConfig,
   };
 };

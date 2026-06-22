@@ -23,6 +23,7 @@ import {
   Card,
   Col,
   Form,
+  Input,
   Row,
   Switch,
   Typography,
@@ -30,8 +31,53 @@ import {
 import { API, showError, showSuccess } from '../../../helpers';
 import { useTranslation } from 'react-i18next';
 import { StatusContext } from '../../../context/Status';
+import { createCustomNavigationLink } from '../../../helpers/customNavigation';
+import { Plus, Trash2 } from 'lucide-react';
 
 const { Text } = Typography;
+
+const defaultHeaderNavModules = () => ({
+  home: true,
+  console: true,
+  pricing: {
+    enabled: true,
+    requireAuth: false,
+  },
+  docs: true,
+  about: true,
+  customLinks: [],
+});
+
+const normalizeEditableCustomLinks = (links) => {
+  if (!Array.isArray(links)) return [];
+
+  return links.map((item, index) => ({
+    id:
+      typeof item?.id === 'string' && item.id.trim()
+        ? item.id.trim()
+        : `custom-${Date.now()}-${index}`,
+    title: typeof item?.title === 'string' ? item.title : '',
+    url: typeof item?.url === 'string' ? item.url : '',
+    enabled: typeof item?.enabled === 'boolean' ? item.enabled : true,
+  }));
+};
+
+const normalizeHeaderNavModules = (modules) => {
+  const merged = {
+    ...defaultHeaderNavModules(),
+    ...(modules || {}),
+  };
+
+  if (typeof merged.pricing === 'boolean') {
+    merged.pricing = {
+      enabled: merged.pricing,
+      requireAuth: false,
+    };
+  }
+
+  merged.customLinks = normalizeEditableCustomLinks(modules?.customLinks);
+  return merged;
+};
 
 export default function SettingsHeaderNavModules(props) {
   const { t } = useTranslation();
@@ -39,16 +85,9 @@ export default function SettingsHeaderNavModules(props) {
   const [statusState, statusDispatch] = useContext(StatusContext);
 
   // 顶栏模块管理状态
-  const [headerNavModules, setHeaderNavModules] = useState({
-    home: true,
-    console: true,
-    pricing: {
-      enabled: true,
-      requireAuth: false, // 默认不需要登录鉴权
-    },
-    docs: true,
-    about: true,
-  });
+  const [headerNavModules, setHeaderNavModules] = useState(
+    defaultHeaderNavModules,
+  );
 
   // 处理顶栏模块配置变更
   function handleHeaderNavModuleChange(moduleKey) {
@@ -77,19 +116,45 @@ export default function SettingsHeaderNavModules(props) {
     setHeaderNavModules(newModules);
   }
 
+  function handleAddCustomLink() {
+    setHeaderNavModules((prev) => ({
+      ...prev,
+      customLinks: [
+        ...(Array.isArray(prev.customLinks) ? prev.customLinks : []),
+        createCustomNavigationLink(),
+      ],
+    }));
+  }
+
+  function handleCustomLinkChange(index, field, value) {
+    setHeaderNavModules((prev) => {
+      const customLinks = Array.isArray(prev.customLinks)
+        ? [...prev.customLinks]
+        : [];
+      customLinks[index] = {
+        ...customLinks[index],
+        [field]: value,
+      };
+
+      return {
+        ...prev,
+        customLinks,
+      };
+    });
+  }
+
+  function handleRemoveCustomLink(index) {
+    setHeaderNavModules((prev) => ({
+      ...prev,
+      customLinks: Array.isArray(prev.customLinks)
+        ? prev.customLinks.filter((_, itemIndex) => itemIndex !== index)
+        : [],
+    }));
+  }
+
   // 重置顶栏模块为默认配置
   function resetHeaderNavModules() {
-    const defaultModules = {
-      home: true,
-      console: true,
-      pricing: {
-        enabled: true,
-        requireAuth: false,
-      },
-      docs: true,
-      about: true,
-    };
-    setHeaderNavModules(defaultModules);
+    setHeaderNavModules(defaultHeaderNavModules());
     showSuccess(t('已重置为默认配置'));
   }
 
@@ -133,29 +198,9 @@ export default function SettingsHeaderNavModules(props) {
     if (props.options && props.options.HeaderNavModules) {
       try {
         const modules = JSON.parse(props.options.HeaderNavModules);
-
-        // 处理向后兼容性：如果pricing是boolean，转换为对象格式
-        if (typeof modules.pricing === 'boolean') {
-          modules.pricing = {
-            enabled: modules.pricing,
-            requireAuth: false, // 默认不需要登录鉴权
-          };
-        }
-
-        setHeaderNavModules(modules);
+        setHeaderNavModules(normalizeHeaderNavModules(modules));
       } catch (error) {
-        // 使用默认配置
-        const defaultModules = {
-          home: true,
-          console: true,
-          pricing: {
-            enabled: true,
-            requireAuth: false,
-          },
-          docs: true,
-          about: true,
-        };
-        setHeaderNavModules(defaultModules);
+        setHeaderNavModules(defaultHeaderNavModules());
       }
     }
   }, [props.options]);
@@ -314,6 +359,114 @@ export default function SettingsHeaderNavModules(props) {
             </Col>
           ))}
         </Row>
+
+        <div
+          style={{
+            marginBottom: '24px',
+            padding: '16px',
+            border: '1px solid var(--semi-color-border)',
+            borderRadius: '8px',
+            backgroundColor: 'var(--semi-color-bg-1)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '12px',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  color: 'var(--semi-color-text-0)',
+                  marginBottom: '4px',
+                }}
+              >
+                {t('顶栏自定义模块')}
+              </div>
+              <Text
+                type='secondary'
+                size='small'
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--semi-color-text-2)',
+                }}
+              >
+                {t('由管理员添加名称和链接，点击后在站内显示目标网站')}
+              </Text>
+            </div>
+            <Button
+              type='primary'
+              theme='light'
+              icon={<Plus size={16} />}
+              onClick={handleAddCustomLink}
+            >
+              {t('添加模块')}
+            </Button>
+          </div>
+
+          {(headerNavModules.customLinks || []).length === 0 ? (
+            <Text type='secondary' size='small'>
+              {t('暂无自定义模块')}
+            </Text>
+          ) : (
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {(headerNavModules.customLinks || []).map((item, index) => (
+                <div
+                  key={item.id || index}
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Input
+                    value={item.title}
+                    placeholder={t('模块名称')}
+                    style={{ flex: '1 1 160px', minWidth: 0 }}
+                    onChange={(value) =>
+                      handleCustomLinkChange(index, 'title', value)
+                    }
+                  />
+                  <Input
+                    value={item.url}
+                    placeholder='https://example.com'
+                    style={{ flex: '2 1 220px', minWidth: 0 }}
+                    onChange={(value) =>
+                      handleCustomLinkChange(index, 'url', value)
+                    }
+                  />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <Switch
+                      checked={item.enabled !== false}
+                      onChange={(checked) =>
+                        handleCustomLinkChange(index, 'enabled', checked)
+                      }
+                    />
+                    <Button
+                      type='danger'
+                      theme='borderless'
+                      icon={<Trash2 size={16} />}
+                      onClick={() => handleRemoveCustomLink(index)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div
           style={{

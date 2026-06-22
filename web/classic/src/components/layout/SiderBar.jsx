@@ -26,6 +26,7 @@ import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
 import { isAdmin, isRoot, showError } from '../../helpers';
+import { buildExternalSitePath } from '../../helpers/customNavigation';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
 import { Nav, Divider, Button } from '@douyinfe/semi-ui';
@@ -48,6 +49,8 @@ const routerMap = {
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
+  chatroom: '/console/chatroom',
+  infinite_canvas: '/console/infinite-canvas',
   personal: '/console/personal',
 };
 
@@ -57,6 +60,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const {
     isModuleVisible,
     hasSectionVisibleModules,
+    getVisibleCustomItems,
     loading: sidebarLoading,
   } = useSidebar();
 
@@ -67,6 +71,17 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const [openedKeys, setOpenedKeys] = useState([]);
   const location = useLocation();
   const [routerMapState, setRouterMapState] = useState(routerMap);
+
+  const customSidebarItems = useMemo(
+    () =>
+      getVisibleCustomItems('console').map((link) => ({
+        text: link.title,
+        itemKey: `custom_${link.id}`,
+        to: buildExternalSitePath(link),
+        isCustom: true,
+      })),
+    [getVisibleCustomItems],
+  );
 
   const workspaceItems = useMemo(() => {
     const items = [
@@ -105,10 +120,17 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className:
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
+      {
+        text: t('无限画布'),
+        itemKey: 'infinite_canvas',
+        to: '/console/infinite-canvas',
+      },
+      ...customSidebarItems,
     ];
 
     // 根据配置过滤项目
     const filteredItems = items.filter((item) => {
+      if (item.isCustom) return true;
       const configVisible = isModuleVisible('console', item.itemKey);
       return configVisible;
     });
@@ -118,6 +140,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     localStorage.getItem('enable_data_export'),
     localStorage.getItem('enable_drawing'),
     localStorage.getItem('enable_task'),
+    customSidebarItems,
     t,
     isModuleVisible,
   ]);
@@ -212,6 +235,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'chat',
         items: chatItems,
       },
+      {
+        text: t('聊天室'),
+        itemKey: 'chatroom',
+        to: '/console/chatroom',
+      },
     ];
 
     // 根据配置过滤项目
@@ -223,19 +251,19 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     return filteredItems;
   }, [chatItems, t, isModuleVisible]);
 
-  // 更新路由映射，添加聊天路由
-  const updateRouterMapWithChats = (chats) => {
+  useEffect(() => {
     const newRouterMap = { ...routerMap };
 
-    if (Array.isArray(chats) && chats.length > 0) {
-      for (let i = 0; i < chats.length; i++) {
-        newRouterMap['chat' + i] = '/console/chat/' + i;
-      }
-    }
+    chatItems.forEach((_, index) => {
+      newRouterMap['chat' + index] = '/console/chat/' + index;
+    });
+
+    customSidebarItems.forEach((item) => {
+      newRouterMap[item.itemKey] = item.to;
+    });
 
     setRouterMapState(newRouterMap);
-    return newRouterMap;
-  };
+  }, [chatItems, customSidebarItems]);
 
   // 加载聊天项
   useEffect(() => {
@@ -267,7 +295,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             chatItems.push(chat);
           }
           setChatItems(chatItems);
-          updateRouterMapWithChats(chats);
         }
       } catch (e) {
         showError('聊天数据解析失败');
@@ -292,11 +319,21 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       }
     }
 
+    if (!matchingKey && currentPath === '/console/external-site') {
+      const currentUrl = new URLSearchParams(location.search).get('url');
+      matchingKey = Object.keys(routerMapState).find((key) => {
+        const route = routerMapState[key];
+        if (!route?.startsWith('/console/external-site?')) return false;
+        const routeUrl = new URLSearchParams(route.split('?')[1]).get('url');
+        return routeUrl === currentUrl;
+      });
+    }
+
     // 如果找到匹配的键，更新选中的键
     if (matchingKey) {
       setSelectedKeys([matchingKey]);
     }
-  }, [location.pathname, routerMapState]);
+  }, [location.pathname, location.search, routerMapState]);
 
   // 监控折叠状态变化以更新 body class
   useEffect(() => {

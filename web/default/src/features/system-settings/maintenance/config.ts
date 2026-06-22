@@ -16,6 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  type CustomNavigationLink,
+  normalizeCustomNavigationLinks,
+} from '@/lib/custom-navigation'
+
 export type HeaderNavAccessConfig = {
   enabled: boolean
   requireAuth: boolean
@@ -28,12 +33,18 @@ export type HeaderNavModulesConfig = {
   rankings: HeaderNavAccessConfig
   docs: boolean
   about: boolean
-  [key: string]: boolean | HeaderNavAccessConfig
+  customLinks?: CustomNavigationLink[]
+  [key: string]:
+    | boolean
+    | HeaderNavAccessConfig
+    | CustomNavigationLink[]
+    | undefined
 }
 
 export type SidebarSectionConfig = {
   enabled: boolean
-  [key: string]: boolean
+  customItems?: CustomNavigationLink[]
+  [key: string]: boolean | CustomNavigationLink[] | undefined
 }
 
 export type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
@@ -58,6 +69,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     playground: true,
     chat: true,
+    chatroom: false,
   },
   console: {
     enabled: true,
@@ -66,6 +78,8 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
+    infinite_canvas: true,
+    customItems: [],
   },
   personal: {
     enabled: true,
@@ -98,6 +112,7 @@ const cloneHeaderNavDefault = (): HeaderNavModulesConfig => ({
   ...HEADER_NAV_DEFAULT,
   pricing: { ...HEADER_NAV_DEFAULT.pricing },
   rankings: { ...HEADER_NAV_DEFAULT.rankings },
+  customLinks: [],
 })
 
 const parseAccessModule = (
@@ -127,7 +142,10 @@ const parseAccessModule = (
 const cloneSidebarDefault = (): SidebarModulesAdminConfig =>
   Object.entries(SIDEBAR_MODULES_DEFAULT).reduce<SidebarModulesAdminConfig>(
     (acc, [section, config]) => {
-      acc[section] = { ...config }
+      acc[section] = {
+        ...config,
+        customItems: config.customItems ? [...config.customItems] : undefined,
+      }
       return acc
     },
     {}
@@ -155,6 +173,10 @@ export function parseHeaderNavModules(
       }
       if (key === 'rankings') {
         result.rankings = parseAccessModule(raw, base.rankings)
+        return
+      }
+      if (key === 'customLinks') {
+        result.customLinks = normalizeCustomNavigationLinks(raw)
         return
       }
 
@@ -201,13 +223,20 @@ export function parseSidebarModulesAdmin(
           defaultSection.enabled ?? true
         ),
       }
+      const customItems = normalizeCustomNavigationLinks(
+        (raw as Record<string, unknown>).customItems
+      )
+      if (customItems.length > 0 || sectionKey === 'console') {
+        sectionConfig.customItems = customItems
+      }
 
       Object.entries(raw as Record<string, unknown>).forEach(
         ([moduleKey, moduleValue]) => {
-          if (moduleKey === 'enabled') return
+          if (moduleKey === 'enabled' || moduleKey === 'customItems') return
+          const fallback = defaultSection[moduleKey]
           sectionConfig[moduleKey] = toBoolean(
             moduleValue,
-            defaultSection[moduleKey] ?? true
+            typeof fallback === 'boolean' ? fallback : true
           )
         }
       )

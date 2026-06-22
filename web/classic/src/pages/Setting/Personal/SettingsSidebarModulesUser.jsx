@@ -74,6 +74,7 @@ export default function SettingsSidebarModulesUser() {
         enabled: true,
         playground: isSidebarModuleAllowed('chat', 'playground'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
+        chatroom: isSidebarModuleAllowed('chat', 'chatroom'),
       };
     }
 
@@ -86,6 +87,7 @@ export default function SettingsSidebarModulesUser() {
         log: isSidebarModuleAllowed('console', 'log'),
         midjourney: isSidebarModuleAllowed('console', 'midjourney'),
         task: isSidebarModuleAllowed('console', 'task'),
+        infinite_canvas: isSidebarModuleAllowed('console', 'infinite_canvas'),
       };
     }
 
@@ -106,6 +108,7 @@ export default function SettingsSidebarModulesUser() {
         models: isSidebarModuleAllowed('admin', 'models'),
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
         redemption: isSidebarModuleAllowed('admin', 'redemption'),
+        subscription: isSidebarModuleAllowed('admin', 'subscription'),
         user: isSidebarModuleAllowed('admin', 'user'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
       };
@@ -301,6 +304,11 @@ export default function SettingsSidebarModulesUser() {
           description: t('AI模型测试环境'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
+        {
+          key: 'chatroom',
+          title: t('聊天室'),
+          description: t('站点用户同频交流入口'),
+        },
       ],
     },
     {
@@ -317,6 +325,11 @@ export default function SettingsSidebarModulesUser() {
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        {
+          key: 'infinite_canvas',
+          title: t('无限画布'),
+          description: t('无限画布工作区'),
+        },
       ],
     },
     {

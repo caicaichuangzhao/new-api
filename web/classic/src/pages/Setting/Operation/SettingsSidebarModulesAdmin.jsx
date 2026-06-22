@@ -23,6 +23,7 @@ import {
   Card,
   Form,
   Button,
+  Input,
   Switch,
   Row,
   Col,
@@ -30,8 +31,39 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showSuccess, showError } from '../../../helpers';
 import { StatusContext } from '../../../context/Status';
+import {
+  DEFAULT_ADMIN_CONFIG,
+  mergeAdminConfig,
+} from '../../../hooks/common/useSidebar';
+import { createCustomNavigationLink } from '../../../helpers/customNavigation';
+import { Plus, Trash2 } from 'lucide-react';
 
 const { Text } = Typography;
+
+const cloneDefaultSidebarModules = () =>
+  JSON.parse(JSON.stringify(DEFAULT_ADMIN_CONFIG));
+
+const normalizeEditableCustomLinks = (links) => {
+  if (!Array.isArray(links)) return [];
+
+  return links.map((item, index) => ({
+    id:
+      typeof item?.id === 'string' && item.id.trim()
+        ? item.id.trim()
+        : `custom-${Date.now()}-${index}`,
+    title: typeof item?.title === 'string' ? item.title : '',
+    url: typeof item?.url === 'string' ? item.url : '',
+    enabled: typeof item?.enabled === 'boolean' ? item.enabled : true,
+  }));
+};
+
+const normalizeEditableSidebarModules = (modules) => {
+  const merged = mergeAdminConfig(modules);
+  merged.console.customItems = normalizeEditableCustomLinks(
+    modules?.console?.customItems,
+  );
+  return merged;
+};
 
 export default function SettingsSidebarModulesAdmin(props) {
   const { t } = useTranslation();
@@ -39,36 +71,9 @@ export default function SettingsSidebarModulesAdmin(props) {
   const [statusState, statusDispatch] = useContext(StatusContext);
 
   // 左侧边栏模块管理状态（管理员全局控制）
-  const [sidebarModulesAdmin, setSidebarModulesAdmin] = useState({
-    chat: {
-      enabled: true,
-      playground: true,
-      chat: true,
-    },
-    console: {
-      enabled: true,
-      detail: true,
-      token: true,
-      log: true,
-      midjourney: true,
-      task: true,
-    },
-    personal: {
-      enabled: true,
-      topup: true,
-      personal: true,
-    },
-    admin: {
-      enabled: true,
-      channel: true,
-      models: true,
-      deployment: true,
-      redemption: true,
-      user: true,
-      subscription: true,
-      setting: true,
-    },
-  });
+  const [sidebarModulesAdmin, setSidebarModulesAdmin] = useState(
+    cloneDefaultSidebarModules,
+  );
 
   // 处理区域级别开关变更
   function handleSectionChange(sectionKey) {
@@ -98,39 +103,60 @@ export default function SettingsSidebarModulesAdmin(props) {
     };
   }
 
+  function handleAddCustomItem() {
+    setSidebarModulesAdmin((prev) => ({
+      ...prev,
+      console: {
+        ...prev.console,
+        customItems: [
+          ...(Array.isArray(prev.console?.customItems)
+            ? prev.console.customItems
+            : []),
+          createCustomNavigationLink(),
+        ],
+      },
+    }));
+  }
+
+  function handleCustomItemChange(index, field, value) {
+    setSidebarModulesAdmin((prev) => {
+      const customItems = Array.isArray(prev.console?.customItems)
+        ? [...prev.console.customItems]
+        : [];
+      customItems[index] = {
+        ...customItems[index],
+        [field]: value,
+      };
+
+      return {
+        ...prev,
+        console: {
+          ...prev.console,
+          customItems,
+        },
+      };
+    });
+  }
+
+  function handleRemoveCustomItem(index) {
+    setSidebarModulesAdmin((prev) => {
+      const customItems = Array.isArray(prev.console?.customItems)
+        ? prev.console.customItems.filter((_, itemIndex) => itemIndex !== index)
+        : [];
+
+      return {
+        ...prev,
+        console: {
+          ...prev.console,
+          customItems,
+        },
+      };
+    });
+  }
+
   // 重置为默认配置
   function resetSidebarModules() {
-    const defaultModules = {
-      chat: {
-        enabled: true,
-        playground: true,
-        chat: true,
-      },
-      console: {
-        enabled: true,
-        detail: true,
-        token: true,
-        log: true,
-        midjourney: true,
-        task: true,
-      },
-      personal: {
-        enabled: true,
-        topup: true,
-        personal: true,
-      },
-      admin: {
-        enabled: true,
-        channel: true,
-        models: true,
-        deployment: true,
-        redemption: true,
-        user: true,
-        subscription: true,
-        setting: true,
-      },
-    };
-    setSidebarModulesAdmin(defaultModules);
+    setSidebarModulesAdmin(cloneDefaultSidebarModules());
     showSuccess(t('已重置为默认配置'));
   }
 
@@ -174,32 +200,9 @@ export default function SettingsSidebarModulesAdmin(props) {
     if (props.options && props.options.SidebarModulesAdmin) {
       try {
         const modules = JSON.parse(props.options.SidebarModulesAdmin);
-        setSidebarModulesAdmin(modules);
+        setSidebarModulesAdmin(normalizeEditableSidebarModules(modules));
       } catch (error) {
-        // 使用默认配置
-        const defaultModules = {
-          chat: { enabled: true, playground: true, chat: true },
-          console: {
-            enabled: true,
-            detail: true,
-            token: true,
-            log: true,
-            midjourney: true,
-            task: true,
-          },
-          personal: { enabled: true, topup: true, personal: true },
-          admin: {
-            enabled: true,
-            channel: true,
-            models: true,
-            deployment: true,
-            redemption: true,
-            user: true,
-            subscription: true,
-            setting: true,
-          },
-        };
-        setSidebarModulesAdmin(defaultModules);
+        setSidebarModulesAdmin(cloneDefaultSidebarModules());
       }
     }
   }, [props.options]);
@@ -217,6 +220,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('AI模型测试环境'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
+        {
+          key: 'chatroom',
+          title: t('聊天室'),
+          description: t('站点用户同频交流入口'),
+        },
       ],
     },
     {
@@ -233,6 +241,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        {
+          key: 'infinite_canvas',
+          title: t('无限画布'),
+          description: t('无限画布工作区'),
+        },
       ],
     },
     {
@@ -394,6 +407,129 @@ export default function SettingsSidebarModulesAdmin(props) {
                 </Col>
               ))}
             </Row>
+
+            {section.key === 'console' && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '16px',
+                  border: '1px solid var(--semi-color-border)',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--semi-color-bg-1)',
+                  opacity: sidebarModulesAdmin.console?.enabled ? 1 : 0.5,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        color: 'var(--semi-color-text-0)',
+                        marginBottom: '4px',
+                      }}
+                    >
+                      {t('控制台自定义模块')}
+                    </div>
+                    <Text
+                      type='secondary'
+                      size='small'
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--semi-color-text-2)',
+                      }}
+                    >
+                      {t('由管理员添加名称和链接，点击后在站内显示目标网站')}
+                    </Text>
+                  </div>
+                  <Button
+                    type='primary'
+                    theme='light'
+                    icon={<Plus size={16} />}
+                    onClick={handleAddCustomItem}
+                    disabled={!sidebarModulesAdmin.console?.enabled}
+                  >
+                    {t('添加模块')}
+                  </Button>
+                </div>
+
+                {(sidebarModulesAdmin.console?.customItems || []).length ===
+                0 ? (
+                  <Text type='secondary' size='small'>
+                    {t('暂无自定义模块')}
+                  </Text>
+                ) : (
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    {(sidebarModulesAdmin.console?.customItems || []).map(
+                      (item, index) => (
+                        <div
+                          key={item.id || index}
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '12px',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Input
+                            value={item.title}
+                            placeholder={t('模块名称')}
+                            style={{ flex: '1 1 160px', minWidth: 0 }}
+                            disabled={!sidebarModulesAdmin.console?.enabled}
+                            onChange={(value) =>
+                              handleCustomItemChange(index, 'title', value)
+                            }
+                          />
+                          <Input
+                            value={item.url}
+                            placeholder='https://example.com'
+                            style={{ flex: '2 1 220px', minWidth: 0 }}
+                            disabled={!sidebarModulesAdmin.console?.enabled}
+                            onChange={(value) =>
+                              handleCustomItemChange(index, 'url', value)
+                            }
+                          />
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <Switch
+                              checked={item.enabled !== false}
+                              disabled={!sidebarModulesAdmin.console?.enabled}
+                              onChange={(checked) =>
+                                handleCustomItemChange(
+                                  index,
+                                  'enabled',
+                                  checked,
+                                )
+                              }
+                            />
+                            <Button
+                              type='danger'
+                              theme='borderless'
+                              icon={<Trash2 size={16} />}
+                              onClick={() => handleRemoveCustomItem(index)}
+                              disabled={!sidebarModulesAdmin.console?.enabled}
+                            />
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
 

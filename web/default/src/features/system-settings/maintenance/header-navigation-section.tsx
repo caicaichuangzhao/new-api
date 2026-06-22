@@ -18,9 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo } from 'react'
 import * as z from 'zod'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  createCustomNavigationLink,
+  normalizeCustomNavigationLinks,
+} from '@/lib/custom-navigation'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -29,6 +35,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import {
   SettingsControlChildren,
@@ -55,9 +62,20 @@ const headerNavSchema = z.object({
   rankingsRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
+  customLinks: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      url: z.string(),
+      enabled: z.boolean(),
+    })
+  ),
 })
 
 type HeaderNavFormValues = z.infer<typeof headerNavSchema>
+type SimpleHeaderModuleKey = 'home' | 'console' | 'docs' | 'about'
+type AccessHeaderEnabledKey = 'pricingEnabled' | 'rankingsEnabled'
+type AccessHeaderRequireAuthKey = 'pricingRequireAuth' | 'rankingsRequireAuth'
 
 type HeaderNavigationSectionProps = {
   config: HeaderNavModulesConfig
@@ -93,6 +111,7 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.about === undefined
       ? HEADER_NAV_DEFAULT.about
       : Boolean(config.about),
+  customLinks: normalizeCustomNavigationLinks(config.customLinks),
 })
 
 export function HeaderNavigationSection({
@@ -107,6 +126,10 @@ export function HeaderNavigationSection({
     resolver: zodResolver(headerNavSchema),
     defaultValues: formDefaults,
   })
+  const customLinks = useFieldArray({
+    control: form.control,
+    name: 'customLinks',
+  })
 
   useEffect(() => {
     form.reset(formDefaults)
@@ -119,6 +142,7 @@ export function HeaderNavigationSection({
       console: values.console,
       docs: values.docs,
       about: values.about,
+      customLinks: normalizeCustomNavigationLinks(values.customLinks),
       pricing: {
         ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
         enabled: values.pricingEnabled,
@@ -146,8 +170,12 @@ export function HeaderNavigationSection({
     form.reset(toFormValues(HEADER_NAV_DEFAULT))
   }
 
+  const addCustomLink = () => {
+    customLinks.append(createCustomNavigationLink())
+  }
+
   const simpleModules: Array<{
-    key: keyof HeaderNavFormValues
+    key: SimpleHeaderModuleKey
     title: string
     description: string
   }> = [
@@ -174,8 +202,8 @@ export function HeaderNavigationSection({
   ]
 
   const accessModules: Array<{
-    enabledKey: keyof HeaderNavFormValues
-    requireAuthKey: keyof HeaderNavFormValues
+    enabledKey: AccessHeaderEnabledKey
+    requireAuthKey: AccessHeaderRequireAuthKey
     requireAuthDependsOn: 'pricingEnabled' | 'rankingsEnabled'
     title: string
     description: string
@@ -292,6 +320,97 @@ export function HeaderNavigationSection({
               </SettingsControlGroup>
             ))}
           </div>
+
+          <SettingsControlGroup>
+            <SettingsSwitchItem>
+              <SettingsSwitchContent>
+                <FormLabel>{t('Custom header links')}</FormLabel>
+                <FormDescription>
+                  {t(
+                    'Add multiple admin-defined top navigation links that open inside the site.'
+                  )}
+                </FormDescription>
+              </SettingsSwitchContent>
+              <Button type='button' variant='outline' onClick={addCustomLink}>
+                <Plus />
+                {t('Add link')}
+              </Button>
+            </SettingsSwitchItem>
+
+            <SettingsControlChildren className='flex flex-col gap-3'>
+              {customLinks.fields.length === 0 ? (
+                <p className='text-muted-foreground px-2 py-3 text-sm'>
+                  {t('No custom links yet.')}
+                </p>
+              ) : (
+                customLinks.fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className='grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto_auto]'
+                  >
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.title`}
+                      render={({ field }) => (
+                        <div className='flex flex-col gap-1.5'>
+                          <FormLabel>{t('Display name')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('Third-party marketplace')}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.url`}
+                      render={({ field }) => (
+                        <div className='flex flex-col gap-1.5'>
+                          <FormLabel>{t('Link URL')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder='https://example.com'
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.enabled`}
+                      render={({ field }) => (
+                        <div className='flex items-end justify-between gap-3 lg:flex-col lg:items-center'>
+                          <FormLabel>{t('Enabled')}</FormLabel>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </div>
+                      )}
+                    />
+                    <div className='flex items-end'>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        size='icon'
+                        aria-label={t('Remove link')}
+                        onClick={() => customLinks.remove(index)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </SettingsControlChildren>
+          </SettingsControlGroup>
         </SettingsForm>
       </Form>
     </SettingsSection>

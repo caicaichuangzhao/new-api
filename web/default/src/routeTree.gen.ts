@@ -46,7 +46,10 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedInfiniteCanvasIndexRouteImport } from './routes/_authenticated/infinite-canvas/index'
+import { Route as AuthenticatedExternalSiteIndexRouteImport } from './routes/_authenticated/external-site/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
+import { Route as AuthenticatedChatroomIndexRouteImport } from './routes/_authenticated/chatroom/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
@@ -261,10 +264,28 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedInfiniteCanvasIndexRoute =
+  AuthenticatedInfiniteCanvasIndexRouteImport.update({
+    id: '/infinite-canvas/',
+    path: '/infinite-canvas/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedExternalSiteIndexRoute =
+  AuthenticatedExternalSiteIndexRouteImport.update({
+    id: '/external-site/',
+    path: '/external-site/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
     path: '/dashboard/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChatroomIndexRoute =
+  AuthenticatedChatroomIndexRouteImport.update({
+    id: '/chatroom/',
+    path: '/chatroom/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedChannelsIndexRoute =
@@ -424,7 +445,10 @@ export interface FileRoutesByFullPath {
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/chatroom/': typeof AuthenticatedChatroomIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/external-site/': typeof AuthenticatedExternalSiteIndexRoute
+  '/infinite-canvas/': typeof AuthenticatedInfiniteCanvasIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -482,7 +506,10 @@ export interface FileRoutesByTo {
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
+  '/chatroom': typeof AuthenticatedChatroomIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/external-site': typeof AuthenticatedExternalSiteIndexRoute
+  '/infinite-canvas': typeof AuthenticatedInfiniteCanvasIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -544,7 +571,10 @@ export interface FileRoutesById {
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/_authenticated/chatroom/': typeof AuthenticatedChatroomIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/external-site/': typeof AuthenticatedExternalSiteIndexRoute
+  '/_authenticated/infinite-canvas/': typeof AuthenticatedInfiniteCanvasIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -605,7 +635,10 @@ export interface FileRouteTypes {
     | '/models/$section'
     | '/usage-logs/$section'
     | '/channels/'
+    | '/chatroom/'
     | '/dashboard/'
+    | '/external-site/'
+    | '/infinite-canvas/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -663,7 +696,10 @@ export interface FileRouteTypes {
     | '/models/$section'
     | '/usage-logs/$section'
     | '/channels'
+    | '/chatroom'
     | '/dashboard'
+    | '/external-site'
+    | '/infinite-canvas'
     | '/keys'
     | '/models'
     | '/playground'
@@ -724,7 +760,10 @@ export interface FileRouteTypes {
     | '/_authenticated/models/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/channels/'
+    | '/_authenticated/chatroom/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/external-site/'
+    | '/_authenticated/infinite-canvas/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -1034,11 +1073,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/infinite-canvas/': {
+      id: '/_authenticated/infinite-canvas/'
+      path: '/infinite-canvas'
+      fullPath: '/infinite-canvas/'
+      preLoaderRoute: typeof AuthenticatedInfiniteCanvasIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/external-site/': {
+      id: '/_authenticated/external-site/'
+      path: '/external-site'
+      fullPath: '/external-site/'
+      preLoaderRoute: typeof AuthenticatedExternalSiteIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
       path: '/dashboard'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/chatroom/': {
+      id: '/_authenticated/chatroom/'
+      path: '/chatroom'
+      fullPath: '/chatroom/'
+      preLoaderRoute: typeof AuthenticatedChatroomIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/channels/': {
@@ -1283,7 +1343,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
+  AuthenticatedChatroomIndexRoute: typeof AuthenticatedChatroomIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedExternalSiteIndexRoute: typeof AuthenticatedExternalSiteIndexRoute
+  AuthenticatedInfiniteCanvasIndexRoute: typeof AuthenticatedInfiniteCanvasIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
@@ -1305,7 +1368,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
+  AuthenticatedChatroomIndexRoute: AuthenticatedChatroomIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedExternalSiteIndexRoute: AuthenticatedExternalSiteIndexRoute,
+  AuthenticatedInfiniteCanvasIndexRoute: AuthenticatedInfiniteCanvasIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,

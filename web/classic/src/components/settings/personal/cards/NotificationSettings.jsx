@@ -68,6 +68,7 @@ const NotificationSettings = ({
       enabled: true,
       playground: true,
       chat: true,
+      chatroom: false,
     },
     console: {
       enabled: true,
@@ -76,6 +77,7 @@ const NotificationSettings = ({
       log: true,
       midjourney: true,
       task: true,
+      infinite_canvas: true,
     },
     personal: {
       enabled: true,
@@ -156,7 +158,7 @@ const NotificationSettings = ({
 
   const resetSidebarModules = () => {
     const defaultConfig = {
-      chat: { enabled: true, playground: true, chat: true },
+      chat: { enabled: true, playground: true, chat: true, chatroom: false },
       console: {
         enabled: true,
         detail: true,
@@ -164,6 +166,7 @@ const NotificationSettings = ({
         log: true,
         midjourney: true,
         task: true,
+        infinite_canvas: true,
       },
       personal: { enabled: true, topup: true, personal: true },
       admin: {
@@ -255,6 +258,11 @@ const NotificationSettings = ({
           description: t('AI模型测试环境'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
+        {
+          key: 'chatroom',
+          title: t('聊天室'),
+          description: t('站点用户同频交流入口'),
+        },
       ],
     },
     {
@@ -271,6 +279,11 @@ const NotificationSettings = ({
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        {
+          key: 'infinite_canvas',
+          title: t('无限画布'),
+          description: t('无限画布工作区'),
+        },
       ],
     },
     {
@@ -478,7 +491,10 @@ const NotificationSettings = ({
                     checkedText={t('开')}
                     uncheckedText={t('关')}
                     onChange={(value) =>
-                      handleFormChange('upstreamModelUpdateNotifyEnabled', value)
+                      handleFormChange(
+                        'upstreamModelUpdateNotifyEnabled',
+                        value,
+                      )
                     }
                     extraText={t(
                       '仅管理员可用。开启后，当系统定时检测全部渠道发现上游模型变更或检测异常时，将按你选择的通知方式发送汇总通知；渠道或模型过多时会自动省略部分明细。',

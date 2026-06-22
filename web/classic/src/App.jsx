@@ -45,6 +45,9 @@ import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
 import Subscription from './pages/Subscription';
+import InfiniteCanvas from './pages/InfiniteCanvas';
+import ExternalSite from './pages/ExternalSite';
+import Chatroom from './pages/Chatroom';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
@@ -152,6 +155,30 @@ function App() {
           element={
             <PrivateRoute>
               <Playground />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/chatroom'
+          element={
+            <PrivateRoute>
+              <Chatroom />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/infinite-canvas'
+          element={
+            <PrivateRoute>
+              <InfiniteCanvas />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/external-site'
+          element={
+            <PrivateRoute>
+              <ExternalSite />
             </PrivateRoute>
           }
         />

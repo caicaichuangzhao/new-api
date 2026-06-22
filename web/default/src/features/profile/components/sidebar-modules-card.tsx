@@ -69,6 +69,11 @@ export function SidebarModulesCard() {
           title: t('Chat'),
           description: t('Chat session management'),
         },
+        {
+          key: 'chatroom',
+          title: t('Chatroom'),
+          description: t('Community chat space'),
+        },
       ],
     },
     {
@@ -100,6 +105,11 @@ export function SidebarModulesCard() {
           key: 'task',
           title: t('Task Logs'),
           description: t('System task records'),
+        },
+        {
+          key: 'infinite_canvas',
+          title: t('Infinite Canvas'),
+          description: t('Unlimited canvas workspace'),
         },
       ],
     },

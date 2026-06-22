@@ -18,6 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
+import {
+  buildExternalSitePath,
+  normalizeCustomNavigationLinks,
+} from '../../helpers/customNavigation';
 
 export const useNavigation = (t, docsLink, headerNavModules) => {
   const mainNavLinks = useMemo(() => {
@@ -28,6 +32,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       pricing: true,
       docs: true,
       about: true,
+      customLinks: [],
     };
 
     // 使用传入的配置或默认配置
@@ -64,6 +69,13 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         itemKey: 'about',
         to: '/about',
       },
+      ...normalizeCustomNavigationLinks(modules.customLinks)
+        .filter((link) => link.enabled)
+        .map((link) => ({
+          text: link.title,
+          itemKey: `custom_${link.id}`,
+          to: buildExternalSitePath(link),
+        })),
     ];
 
     // 根据配置过滤导航链接
@@ -76,6 +88,9 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         return typeof modules.pricing === 'object'
           ? modules.pricing.enabled
           : modules.pricing;
+      }
+      if (link.itemKey.startsWith('custom_')) {
+        return true;
       }
       return modules[link.itemKey] === true;
     });

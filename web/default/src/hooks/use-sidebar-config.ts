@@ -23,7 +23,7 @@ import type { NavGroup, NavItem } from '@/components/layout/types'
 
 type SidebarSectionConfig = {
   enabled: boolean
-  [key: string]: boolean
+  [key: string]: boolean | unknown
 }
 
 type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
@@ -40,6 +40,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     playground: true,
     chat: true,
+    chatroom: false,
   },
   console: {
     enabled: true,
@@ -48,6 +49,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
+    infinite_canvas: true,
   },
   personal: {
     enabled: true,
@@ -95,6 +97,7 @@ const mergeWithDefaultSidebarModules = (
  */
 const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/playground': { section: 'chat', module: 'playground' },
+  '/chatroom': { section: 'chat', module: 'chatroom' },
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
@@ -104,6 +107,8 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/common': { section: 'console', module: 'log' },
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
   '/usage-logs/task': { section: 'console', module: 'task' },
+  '/infinite-canvas': { section: 'console', module: 'infinite_canvas' },
+  '/external-site': { section: 'console', module: 'enabled' },
   '/wallet': { section: 'personal', module: 'topup' },
   '/profile': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
@@ -178,7 +183,9 @@ function isModuleEnabled(
   const { section, module } = mapping
   const adminSection = adminConfig[section]
   const adminAllowed = Boolean(
-    adminSection && adminSection.enabled && adminSection[module] === true
+    adminSection &&
+    adminSection.enabled &&
+    (module === 'enabled' || adminSection[module] === true)
   )
   if (!adminAllowed) return false
 

@@ -125,7 +125,13 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
       <SidebarMenuButton
         isActive={checkIsActive(href, item)}
         tooltip={item.title}
-        render={<Link to={item.url} onClick={() => setOpenMobile(false)} />}
+        render={
+          item.reload ? (
+            <a href={item.url as string} onClick={() => setOpenMobile(false)} />
+          ) : (
+            <Link to={item.url} onClick={() => setOpenMobile(false)} />
+          )
+        }
       >
         {item.icon && <item.icon className='shrink-0' />}
         <span className='min-w-0 flex-1 truncate'>{item.title}</span>
@@ -182,7 +188,17 @@ function SidebarMenuCollapsible({
               <SidebarMenuSubButton
                 isActive={checkIsActive(href, subItem)}
                 render={
-                  <Link to={subItem.url} onClick={() => setOpenMobile(false)} />
+                  subItem.reload ? (
+                    <a
+                      href={subItem.url as string}
+                      onClick={() => setOpenMobile(false)}
+                    />
+                  ) : (
+                    <Link
+                      to={subItem.url}
+                      onClick={() => setOpenMobile(false)}
+                    />
+                  )
                 }
               >
                 {subItem.icon && <subItem.icon className='shrink-0' />}
@@ -234,10 +250,17 @@ function SidebarMenuCollapsedDropdown({
               <DropdownMenuItem
                 key={`${sub.title}-${sub.url}`}
                 render={
-                  <Link
-                    to={sub.url}
-                    className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
-                  />
+                  sub.reload ? (
+                    <a
+                      href={sub.url as string}
+                      className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
+                    />
+                  ) : (
+                    <Link
+                      to={sub.url}
+                      className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
+                    />
+                  )
                 }
               >
                 {sub.icon && <sub.icon />}

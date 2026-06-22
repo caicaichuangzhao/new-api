@@ -17,6 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getStatus } from '@/lib/api'
+import {
+  type CustomNavigationLink,
+  normalizeCustomNavigationLinks,
+} from '@/lib/custom-navigation'
 
 export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
@@ -29,7 +33,8 @@ export type HeaderNavModules = {
   rankings: ModuleAccess
   docs: boolean
   about: boolean
-  [key: string]: boolean | ModuleAccess
+  customLinks?: CustomNavigationLink[]
+  [key: string]: boolean | ModuleAccess | CustomNavigationLink[] | undefined
 }
 
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
@@ -39,6 +44,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   rankings: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
+  customLinks: [],
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
@@ -116,6 +122,10 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
     }
     if (key === 'rankings') {
       result.rankings = parseAccess(value, result.rankings)
+      return
+    }
+    if (key === 'customLinks') {
+      result.customLinks = normalizeCustomNavigationLinks(value)
       return
     }
 
