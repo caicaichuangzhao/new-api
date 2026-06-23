@@ -20,6 +20,13 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState } from 'react';
 import { Input, InputNumber, Modal, Typography } from '@douyinfe/semi-ui';
 import { WalletCards } from 'lucide-react';
+import { getCurrencyConfig } from '../../../helpers';
+import {
+  getQuotaPerUnit,
+  moneyAmountToQuota,
+  quotaToMoneyAmount,
+  renderMoneyQuota,
+} from '../../../helpers/quota';
 
 const AffiliateWithdrawalModal = ({
   t,
@@ -27,19 +34,19 @@ const AffiliateWithdrawalModal = ({
   onCancel,
   onSubmit,
   userState,
-  renderQuota,
-  getQuotaPerUnit,
   loading,
 }) => {
   const [alipayName, setAlipayName] = useState('');
   const [alipayAccount, setAlipayAccount] = useState('');
-  const [quota, setQuota] = useState(getQuotaPerUnit());
+  const [amount, setAmount] = useState(quotaToMoneyAmount(getQuotaPerUnit()));
+  const minimumAmount = quotaToMoneyAmount(getQuotaPerUnit());
+  const availableAmount = quotaToMoneyAmount(userState?.user?.aff_quota || 0);
 
   useEffect(() => {
     if (visible) {
-      setQuota(getQuotaPerUnit());
+      setAmount(quotaToMoneyAmount(getQuotaPerUnit()));
     }
-  }, [visible, getQuotaPerUnit]);
+  }, [visible]);
 
   return (
     <Modal
@@ -54,7 +61,7 @@ const AffiliateWithdrawalModal = ({
         onSubmit({
           alipay_name: alipayName,
           alipay_account: alipayAccount,
-          quota: Number(quota || 0),
+          quota: moneyAmountToQuota(amount),
         })
       }
       onCancel={onCancel}
@@ -68,7 +75,7 @@ const AffiliateWithdrawalModal = ({
             {t('可用邀请额度')}
           </Typography.Text>
           <Input
-            value={renderQuota(userState?.user?.aff_quota || 0)}
+            value={renderMoneyQuota(userState?.user?.aff_quota || 0)}
             disabled
             className='!rounded-lg'
           />
@@ -97,13 +104,16 @@ const AffiliateWithdrawalModal = ({
         </div>
         <div>
           <Typography.Text strong className='block mb-2'>
-            {t('提现额度')} · {t('最低') + renderQuota(getQuotaPerUnit())}
+            {t('提现金额')} · {t('最低') + renderMoneyQuota(getQuotaPerUnit())}
           </Typography.Text>
           <InputNumber
-            min={getQuotaPerUnit()}
-            max={userState?.user?.aff_quota || 0}
-            value={quota}
-            onChange={(value) => setQuota(value)}
+            prefix={getCurrencyConfig().symbol}
+            min={minimumAmount}
+            max={availableAmount}
+            step={0.01}
+            precision={2}
+            value={amount}
+            onChange={(value) => setAmount(value)}
             className='w-full !rounded-lg'
           />
         </div>

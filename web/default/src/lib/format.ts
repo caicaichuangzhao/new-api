@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import dayjs from '@/lib/dayjs'
 import {
+  formatBillingCurrencyFromUSD,
   formatCurrencyFromUSD,
   formatQuotaWithCurrency,
   getCurrencyDisplay,
@@ -89,6 +90,43 @@ export function parseQuotaFromDollars(amount: number): number {
   const usdAmount = exchangeRate > 0 ? amount / exchangeRate : amount
 
   return Math.round(usdAmount * config.quotaPerUnit)
+}
+
+/**
+ * Convert raw quota units to a money amount for cash-like inputs.
+ * Unlike quotaUnitsToDollars, token display mode is intentionally treated as USD.
+ */
+export function quotaUnitsToMoneyAmount(units: number): number {
+  const { config, meta } = getCurrencyDisplay()
+  const usdAmount = units / config.quotaPerUnit
+  const exchangeRate =
+    meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
+
+  return usdAmount * exchangeRate
+}
+
+/**
+ * Parse a cash-like display amount back into quota units.
+ * Token display mode is intentionally treated as USD for withdrawal/transfer inputs.
+ */
+export function parseMoneyAmountToQuotaUnits(amount: number): number {
+  if (!Number.isFinite(amount)) return 0
+
+  const { config, meta } = getCurrencyDisplay()
+  const exchangeRate =
+    meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
+  const usdAmount = exchangeRate > 0 ? amount / exchangeRate : amount
+
+  return Math.round(usdAmount * config.quotaPerUnit)
+}
+
+export function formatMoneyQuota(quota: number): string {
+  const { config } = getCurrencyDisplay()
+  return formatBillingCurrencyFromUSD(quota / config.quotaPerUnit, {
+    digitsLarge: 2,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
 }
 
 /**

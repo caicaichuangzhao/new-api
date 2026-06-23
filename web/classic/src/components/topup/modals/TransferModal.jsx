@@ -20,6 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Modal, Typography, Input, InputNumber } from '@douyinfe/semi-ui';
 import { CreditCard } from 'lucide-react';
+import { getCurrencyConfig } from '../../../helpers';
+import {
+  getQuotaPerUnit,
+  quotaToMoneyAmount,
+  renderMoneyQuota,
+} from '../../../helpers/quota';
 
 const TransferModal = ({
   t,
@@ -27,11 +33,12 @@ const TransferModal = ({
   transfer,
   handleTransferCancel,
   userState,
-  renderQuota,
-  getQuotaPerUnit,
   transferAmount,
   setTransferAmount,
 }) => {
+  const minimumAmount = quotaToMoneyAmount(getQuotaPerUnit());
+  const availableAmount = quotaToMoneyAmount(userState?.user?.aff_quota || 0);
+
   return (
     <Modal
       title={
@@ -52,18 +59,21 @@ const TransferModal = ({
             {t('可用邀请额度')}
           </Typography.Text>
           <Input
-            value={renderQuota(userState?.user?.aff_quota)}
+            value={renderMoneyQuota(userState?.user?.aff_quota || 0)}
             disabled
             className='!rounded-lg'
           />
         </div>
         <div>
           <Typography.Text strong className='block mb-2'>
-            {t('划转额度')} · {t('最低') + renderQuota(getQuotaPerUnit())}
+            {t('划转金额')} · {t('最低') + renderMoneyQuota(getQuotaPerUnit())}
           </Typography.Text>
           <InputNumber
-            min={getQuotaPerUnit()}
-            max={userState?.user?.aff_quota || 0}
+            prefix={getCurrencyConfig().symbol}
+            min={minimumAmount}
+            max={availableAmount}
+            step={0.01}
+            precision={2}
             value={transferAmount}
             onChange={(value) => setTransferAmount(value)}
             className='w-full !rounded-lg'

@@ -4632,6 +4632,10 @@
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
     "Zoom in": "Увеличить",
-    "Zoom out": "Уменьшить"
+    "Zoom out": "Уменьшить",
+    "Invite friends": "Приглашайте друзей",
+    "First top-up earns {{ratio}}": "первое пополнение приносит {{ratio}}",
+    "eligible later spending returns {{ratio}}": "последующие учитываемые расходы возвращают {{ratio}}",
+    "Referral rewards are currently disabled.": "Реферальные вознаграждения сейчас отключены."
   }
 }

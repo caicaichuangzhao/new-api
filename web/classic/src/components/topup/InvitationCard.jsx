@@ -50,7 +50,72 @@ const InvitationCard = ({
   affLink,
   handleAffLinkClick,
   complianceConfirmed = true,
+  topupInfo,
 }) => {
+  const rewardConfigLoaded =
+    topupInfo?.aff_first_topup_reward_ratio !== undefined &&
+    topupInfo?.aff_consumption_reward_ratio !== undefined;
+  const firstTopupRatio = rewardConfigLoaded
+    ? Number(topupInfo?.aff_first_topup_reward_ratio || 0)
+    : 0;
+  const consumptionRatio = rewardConfigLoaded
+    ? Number(topupInfo?.aff_consumption_reward_ratio || 0)
+    : 0;
+  const formatRewardRatio = (ratio) => {
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      return t('未启用');
+    }
+    return `${Number(ratio).toLocaleString(undefined, {
+      maximumFractionDigits: 4,
+    })}%`;
+  };
+  const activeRewardParts = [
+    firstTopupRatio > 0
+      ? t('好友首充你得 {{ratio}}', {
+          ratio: formatRewardRatio(firstTopupRatio),
+        })
+      : null,
+    consumptionRatio > 0
+      ? t('后续合规消费再得 {{ratio}}', {
+          ratio: formatRewardRatio(consumptionRatio),
+        })
+      : null,
+  ].filter(Boolean);
+  const rewardHeadline = !rewardConfigLoaded
+    ? t('邀请好友获得额外奖励')
+    : activeRewardParts.length > 0
+      ? activeRewardParts.join(' · ')
+      : t('邀请返利暂未开启');
+
+  const rewardRules = [];
+  if (!rewardConfigLoaded) {
+    rewardRules.push(t('邀请好友注册，好友充值后您可获得相应奖励'));
+  } else if (firstTopupRatio > 0) {
+    rewardRules.push(
+      t('好友首次充值到账后，系统按到账额度的 {{ratio}} 发放邀请奖励', {
+        ratio: formatRewardRatio(firstTopupRatio),
+      }),
+    );
+  }
+  if (consumptionRatio > 0) {
+    rewardRules.push(
+      t(
+        '首充额度消费不重复返；好友之后使用正常充值余额消费时，再按可返利消费额的 {{ratio}} 持续返现',
+        {
+          ratio: formatRewardRatio(consumptionRatio),
+        },
+      ),
+    );
+  }
+  if (rewardRules.length === 0) {
+    rewardRules.push(t('当前邀请返利暂未开启，邀请好友后请关注平台活动'));
+  } else if (rewardConfigLoaded) {
+    rewardRules.push(
+      t('赠送余额、金币、营销奖励、邀请奖励划转等非正常充值额度不参与返利'),
+    );
+  }
+  rewardRules.push(t('收益可划转到余额继续使用，也可以申请提现'));
+
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -62,7 +127,9 @@ const InvitationCard = ({
           <Typography.Text className='text-lg font-medium'>
             {t('邀请奖励')}
           </Typography.Text>
-          <div className='text-xs'>{t('邀请好友获得额外奖励')}</div>
+          <div className='text-xs text-green-600 font-medium'>
+            {rewardHeadline}
+          </div>
         </div>
       </div>
 
@@ -249,26 +316,14 @@ const InvitationCard = ({
           title={<Text type='tertiary'>{t('奖励说明')}</Text>}
         >
           <div className='space-y-3'>
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('邀请好友注册，好友充值后您可获得相应奖励')}
-              </Text>
-            </div>
-
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('通过划转功能将奖励额度转入到您的账户余额中')}
-              </Text>
-            </div>
-
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('邀请的好友越多，获得的奖励越多')}
-              </Text>
-            </div>
+            {rewardRules.map((rule) => (
+              <div key={rule} className='flex items-start gap-2'>
+                <Badge dot type='success' />
+                <Text type='tertiary' className='text-sm'>
+                  {rule}
+                </Text>
+              </div>
+            ))}
           </div>
         </Card>
       </Space>

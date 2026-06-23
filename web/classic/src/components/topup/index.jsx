@@ -27,8 +27,13 @@ import {
   renderQuota,
   renderQuotaWithAmount,
   copy,
-  getQuotaPerUnit,
 } from '../../helpers';
+import {
+  getQuotaPerUnit,
+  moneyAmountToQuota,
+  quotaToMoneyAmount,
+  renderMoneyQuota,
+} from '../../helpers/quota';
 import { Modal, Toast } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
@@ -692,6 +697,12 @@ const TopUp = () => {
               data.payment_compliance_confirmed !== false,
             payment_compliance_terms_version:
               data.payment_compliance_terms_version || '',
+            aff_first_topup_reward_ratio: Number(
+              data.aff_first_topup_reward_ratio || 0,
+            ),
+            aff_consumption_reward_ratio: Number(
+              data.aff_consumption_reward_ratio || 0,
+            ),
           }));
 
           // 设置 Creem 产品
@@ -743,12 +754,13 @@ const TopUp = () => {
 
   // 划转邀请额度
   const transfer = async () => {
-    if (transferAmount < getQuotaPerUnit()) {
-      showError(t('划转金额最低为') + ' ' + renderQuota(getQuotaPerUnit()));
+    const quota = moneyAmountToQuota(transferAmount);
+    if (quota < getQuotaPerUnit()) {
+      showError(t('划转金额最低为') + ' ' + renderMoneyQuota(getQuotaPerUnit()));
       return;
     }
     const res = await API.post(`/api/user/aff_transfer`, {
-      quota: transferAmount,
+      quota,
     });
     const { success, message } = res.data;
     if (success) {
@@ -766,7 +778,7 @@ const TopUp = () => {
       return;
     }
     if (payload.quota < getQuotaPerUnit()) {
-      showError(t('提现额度最低为') + ' ' + renderQuota(getQuotaPerUnit()));
+      showError(t('提现额度最低为') + ' ' + renderMoneyQuota(getQuotaPerUnit()));
       return;
     }
     setWithdrawalLoading(true);
@@ -805,7 +817,7 @@ const TopUp = () => {
   useEffect(() => {
     // 始终获取最新用户数据，确保余额等统计信息准确
     getUserQuota().then();
-    setTransferAmount(getQuotaPerUnit());
+    setTransferAmount(quotaToMoneyAmount(getQuotaPerUnit()));
   }, []);
 
   useEffect(() => {
@@ -943,8 +955,6 @@ const TopUp = () => {
         transfer={transfer}
         handleTransferCancel={handleTransferCancel}
         userState={userState}
-        renderQuota={renderQuota}
-        getQuotaPerUnit={getQuotaPerUnit}
         transferAmount={transferAmount}
         setTransferAmount={setTransferAmount}
       />
@@ -955,8 +965,6 @@ const TopUp = () => {
         onCancel={() => setOpenWithdrawal(false)}
         onSubmit={submitAffiliateWithdrawal}
         userState={userState}
-        renderQuota={renderQuota}
-        getQuotaPerUnit={getQuotaPerUnit}
         loading={withdrawalLoading}
       />
 
@@ -1077,6 +1085,7 @@ const TopUp = () => {
           affLink={affLink}
           handleAffLinkClick={handleAffLinkClick}
           complianceConfirmed={topupInfo.payment_compliance_confirmed !== false}
+          topupInfo={topupInfo}
         />
       </div>
     </div>

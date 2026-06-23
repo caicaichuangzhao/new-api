@@ -19,7 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatQuota } from '@/lib/format'
+import {
+  formatMoneyQuota,
+  parseMoneyAmountToQuotaUnits,
+  quotaUnitsToMoneyAmount,
+} from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
   Field,
@@ -48,21 +52,27 @@ export function AffiliateWithdrawalDialog({
   onConfirm,
 }: AffiliateWithdrawalDialogProps) {
   const { t } = useTranslation()
-  const defaultQuota = useMemo(
-    () => Math.min(Math.max(availableQuota, 0), QUOTA_PER_DOLLAR),
-    [availableQuota]
+  const minimumAmount = quotaUnitsToMoneyAmount(QUOTA_PER_DOLLAR)
+  const availableAmount = quotaUnitsToMoneyAmount(availableQuota)
+  const defaultAmount = useMemo(
+    () => Math.min(Math.max(availableAmount, 0), minimumAmount),
+    [availableAmount, minimumAmount]
   )
   const [alipayName, setAlipayName] = useState('')
   const [alipayAccount, setAlipayAccount] = useState('')
-  const [quota, setQuota] = useState(defaultQuota)
+  const [amount, setAmount] = useState(defaultAmount)
+  const quota = useMemo(
+    () => parseMoneyAmountToQuotaUnits(amount),
+    [amount]
+  )
 
   useEffect(() => {
     if (open) {
       setAlipayName('')
       setAlipayAccount('')
-      setQuota(defaultQuota)
+      setAmount(defaultAmount)
     }
-  }, [defaultQuota, open])
+  }, [defaultAmount, open])
 
   const canSubmit =
     alipayName.trim() !== '' &&
@@ -144,21 +154,21 @@ export function AffiliateWithdrawalDialog({
           <Input
             id='affiliate-withdrawal-quota'
             type='number'
-            min={QUOTA_PER_DOLLAR}
-            max={availableQuota}
-            step={QUOTA_PER_DOLLAR}
-            value={quota}
-            onChange={(event) => setQuota(Number(event.target.value))}
+            min={minimumAmount}
+            max={availableAmount}
+            step={0.01}
+            value={amount}
+            onChange={(event) => setAmount(Number(event.target.value))}
             disabled={submitting}
             className='font-mono'
           />
           <FieldDescription>
             {t('Available: {{amount}}', {
-              amount: formatQuota(availableQuota),
+              amount: formatMoneyQuota(availableQuota),
             })}
             {' · '}
             {t('Minimum: {{amount}}', {
-              amount: formatQuota(QUOTA_PER_DOLLAR),
+              amount: formatMoneyQuota(QUOTA_PER_DOLLAR),
             })}
           </FieldDescription>
         </Field>

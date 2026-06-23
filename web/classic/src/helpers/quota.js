@@ -46,6 +46,36 @@ export const displayAmountToQuota = (amount) => {
   return sign * Math.round(usd * getQuotaPerUnit());
 };
 
+export const quotaToMoneyAmount = (quota) => {
+  const q = Number(quota || 0);
+  if (!Number.isFinite(q) || q === 0) return 0;
+  const { rate } = getCurrencyConfig();
+  return (q / getQuotaPerUnit()) * (rate || 1);
+};
+
+export const moneyAmountToQuota = (amount) => {
+  const val = Number(amount || 0);
+  if (!Number.isFinite(val) || val === 0) return 0;
+  const sign = Math.sign(val);
+  const abs = Math.abs(val);
+  const { rate } = getCurrencyConfig();
+  const usd = abs / (rate || 1);
+  return sign * Math.round(usd * getQuotaPerUnit());
+};
+
+export const renderMoneyQuota = (quota) => {
+  const amount = quotaToMoneyAmount(quota);
+  const { symbol } = getCurrencyConfig();
+  const digits = Math.abs(amount) >= 1 ? 2 : 6;
+  return (
+    symbol +
+    amount.toLocaleString(undefined, {
+      minimumFractionDigits: Math.abs(amount) >= 1 ? 2 : 0,
+      maximumFractionDigits: digits,
+    })
+  );
+};
+
 export const goldAmountToQuota = (amount) => {
   const val = Number(amount || 0);
   if (!Number.isFinite(val) || val === 0) return 0;

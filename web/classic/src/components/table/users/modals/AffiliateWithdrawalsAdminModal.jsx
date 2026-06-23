@@ -34,7 +34,8 @@ import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
-import { API, renderQuota, timestamp2string } from '../../../../helpers';
+import { API, timestamp2string } from '../../../../helpers';
+import { renderMoneyQuota } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 
 const { Text } = Typography;
@@ -139,7 +140,7 @@ const AffiliateWithdrawalsAdminModal = ({ visible, onCancel, t }) => {
       {
         title: t('提现额度'),
         dataIndex: 'quota',
-        render: (quota) => <Text>{renderQuota(quota)}</Text>,
+        render: (quota) => <Text>{renderMoneyQuota(quota)}</Text>,
       },
       {
         title: t('支付宝信息'),

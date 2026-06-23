@@ -20,7 +20,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import { formatMoneyQuota, formatTimestampToDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -301,7 +301,7 @@ export function AffiliateWithdrawalsAdminDialog({
                           {t('Amount')}
                         </div>
                         <div className='mt-1 font-semibold'>
-                          {formatQuota(record.quota)}
+                          {formatMoneyQuota(record.quota)}
                         </div>
                       </div>
                       <div>

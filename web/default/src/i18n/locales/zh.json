@@ -4632,6 +4632,10 @@
     "Zhipu V4": "智谱 V4",
     "Zoom": "缩放",
     "Zoom in": "放大",
-    "Zoom out": "缩小"
+    "Zoom out": "缩小",
+    "Invite friends": "邀请好友",
+    "First top-up earns {{ratio}}": "好友首充你得 {{ratio}}",
+    "eligible later spending returns {{ratio}}": "后续合规消费再得 {{ratio}}",
+    "Referral rewards are currently disabled.": "邀请返利暂未开启。"
   }
 }

@@ -162,6 +162,10 @@ export interface TopupInfo {
   payment_compliance_confirmed?: boolean
   /** Current compliance terms version */
   payment_compliance_terms_version?: string
+  /** Referral reward ratio for invitee first successful top-up, in percent */
+  aff_first_topup_reward_ratio?: number
+  /** Referral cashback ratio for eligible invitee consumption, in percent */
+  aff_consumption_reward_ratio?: number
 }
 
 /**

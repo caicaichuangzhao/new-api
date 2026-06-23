@@ -344,6 +344,7 @@ export function Wallet(props: WalletProps) {
 
             <AffiliateRewardsCard
               user={user}
+              topupInfo={topupInfo}
               affiliateLink={affiliateLink}
               onTransfer={() => setTransferDialogOpen(true)}
               onWithdraw={() => setWithdrawalDialogOpen(true)}

@@ -16,13 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatQuota } from '@/lib/format'
+import {
+  formatMoneyQuota,
+  parseMoneyAmountToQuotaUnits,
+  quotaUnitsToMoneyAmount,
+} from '@/lib/format'
 import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/dialog'
 import { QUOTA_PER_DOLLAR } from '../../constants'
 
@@ -42,17 +51,25 @@ export function TransferDialog({
   transferring,
 }: TransferDialogProps) {
   const { t } = useTranslation()
-  const [amount, setAmount] = useState(QUOTA_PER_DOLLAR)
+  const minimumAmount = quotaUnitsToMoneyAmount(QUOTA_PER_DOLLAR)
+  const availableAmount = quotaUnitsToMoneyAmount(availableQuota)
+  const [amount, setAmount] = useState(minimumAmount)
+  const quota = useMemo(
+    () => parseMoneyAmountToQuotaUnits(amount),
+    [amount]
+  )
+  const canSubmit = quota >= QUOTA_PER_DOLLAR && quota <= availableQuota
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAmount(QUOTA_PER_DOLLAR)
+      setAmount(minimumAmount)
     }
-  }, [open])
+  }, [minimumAmount, open])
 
   const handleConfirm = async () => {
-    const success = await onConfirm(amount)
+    if (!canSubmit) return
+    const success = await onConfirm(quota)
     if (success) {
       onOpenChange(false)
     }
@@ -68,7 +85,7 @@ export function TransferDialog({
       titleClassName='text-xl font-semibold'
       footerClassName='grid grid-cols-2 gap-2 sm:flex'
       contentHeight='auto'
-      bodyClassName='space-y-4'
+      bodyClassName='flex flex-col gap-4'
       footer={
         <>
           <Button
@@ -78,45 +95,42 @@ export function TransferDialog({
           >
             {t('Cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={transferring}>
+          <Button onClick={handleConfirm} disabled={!canSubmit || transferring}>
             {transferring && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {t('Transfer')}
           </Button>
         </>
       }
     >
-      <div className='space-y-4 py-3 sm:space-y-6 sm:py-4'>
-        <div className='space-y-2'>
-          <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
+      <FieldGroup className='py-3 sm:py-4'>
+        <Field>
+          <FieldLabel>
             {t('Available Rewards')}
-          </Label>
+          </FieldLabel>
           <div className='text-2xl font-semibold'>
-            {formatQuota(availableQuota)}
+            {formatMoneyQuota(availableQuota)}
           </div>
-        </div>
+        </Field>
 
-        <div className='space-y-3'>
-          <Label
-            htmlFor='transfer-amount'
-            className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
-          >
+        <Field>
+          <FieldLabel htmlFor='transfer-amount'>
             {t('Transfer Amount')}
-          </Label>
+          </FieldLabel>
           <Input
             id='transfer-amount'
             type='number'
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
-            min={QUOTA_PER_DOLLAR}
-            max={availableQuota}
-            step={QUOTA_PER_DOLLAR}
+            min={minimumAmount}
+            max={availableAmount}
+            step={0.01}
             className='font-mono text-lg'
           />
-          <p className='text-muted-foreground text-xs'>
-            {t('Minimum:')} {formatQuota(QUOTA_PER_DOLLAR)}
-          </p>
-        </div>
-      </div>
+          <FieldDescription>
+            {t('Minimum:')} {formatMoneyQuota(QUOTA_PER_DOLLAR)}
+          </FieldDescription>
+        </Field>
+      </FieldGroup>
     </Dialog>
   )
 }

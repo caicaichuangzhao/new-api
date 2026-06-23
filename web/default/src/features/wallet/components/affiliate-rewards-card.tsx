@@ -24,10 +24,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CopyButton } from '@/components/copy-button'
-import type { UserWalletData } from '../types'
+import type { TopupInfo, UserWalletData } from '../types'
 
 interface AffiliateRewardsCardProps {
   user: UserWalletData | null
+  topupInfo: TopupInfo | null
   affiliateLink: string
   onTransfer: () => void
   onWithdraw: () => void
@@ -38,6 +39,7 @@ interface AffiliateRewardsCardProps {
 
 export function AffiliateRewardsCard({
   user,
+  topupInfo,
   affiliateLink,
   onTransfer,
   onWithdraw,
@@ -62,6 +64,33 @@ export function AffiliateRewardsCard({
   }
 
   const hasRewards = (user?.aff_quota ?? 0) > 0
+  const firstTopupRatio = Number(topupInfo?.aff_first_topup_reward_ratio ?? 0)
+  const consumptionRatio = Number(topupInfo?.aff_consumption_reward_ratio ?? 0)
+  const formatRewardRatio = (ratio: number) => {
+    if (!Number.isFinite(ratio) || ratio <= 0) return t('Disabled')
+    return `${new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 4,
+    }).format(ratio)}%`
+  }
+  const activeRewardParts = [
+    firstTopupRatio > 0
+      ? t('First top-up earns {{ratio}}', {
+          ratio: formatRewardRatio(firstTopupRatio),
+        })
+      : null,
+    consumptionRatio > 0
+      ? t('eligible later spending returns {{ratio}}', {
+          ratio: formatRewardRatio(consumptionRatio),
+        })
+      : null,
+  ].filter(Boolean)
+  const rewardSummary = !topupInfo
+    ? t(
+        'Earn rewards when your referrals add funds. Transfer accumulated rewards to your balance anytime.'
+      )
+    : activeRewardParts.length > 0
+      ? `${t('Invite friends')}: ${activeRewardParts.join(' · ')}`
+      : t('Referral rewards are currently disabled.')
 
   return (
     <Card className='bg-muted/20 py-0'>
@@ -74,10 +103,8 @@ export function AffiliateRewardsCard({
             <h3 className='truncate text-sm font-semibold'>
               {t('Referral Program')}
             </h3>
-            <p className='text-muted-foreground line-clamp-1 text-xs'>
-              {t(
-                'Earn rewards when your referrals add funds. Transfer accumulated rewards to your balance anytime.'
-              )}
+            <p className='text-muted-foreground line-clamp-2 text-xs'>
+              {rewardSummary}
             </p>
           </div>
         </div>

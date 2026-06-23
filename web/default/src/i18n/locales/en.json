@@ -4632,6 +4632,10 @@
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
     "Zoom in": "Zoom in",
-    "Zoom out": "Zoom out"
+    "Zoom out": "Zoom out",
+    "Invite friends": "Invite friends",
+    "First top-up earns {{ratio}}": "First top-up earns {{ratio}}",
+    "eligible later spending returns {{ratio}}": "eligible later spending returns {{ratio}}",
+    "Referral rewards are currently disabled.": "Referral rewards are currently disabled."
   }
 }

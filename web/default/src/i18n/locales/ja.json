@@ -4632,6 +4632,10 @@
     "Zhipu V4": "Zhipu V 4",
     "Zoom": "ズーム",
     "Zoom in": "拡大",
-    "Zoom out": "縮小"
+    "Zoom out": "縮小",
+    "Invite friends": "友達を招待",
+    "First top-up earns {{ratio}}": "初回チャージで {{ratio}} 獲得",
+    "eligible later spending returns {{ratio}}": "対象となる以後の利用で {{ratio}} 還元",
+    "Referral rewards are currently disabled.": "紹介報酬は現在無効です。"
   }
 }
