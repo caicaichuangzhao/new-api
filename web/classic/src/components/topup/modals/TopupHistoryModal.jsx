@@ -34,7 +34,8 @@ import {
 } from '@douyinfe/semi-illustrations';
 import { Coins } from 'lucide-react';
 import { IconSearch } from '@douyinfe/semi-icons';
-import { API, timestamp2string } from '../../../helpers';
+import { API, renderQuota, timestamp2string } from '../../../helpers';
+import { renderGoldQuota } from '../../../helpers/quota';
 import { isAdmin } from '../../../helpers/utils';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 const { Text } = Typography;
@@ -55,6 +56,8 @@ const PAYMENT_METHOD_MAP = {
   waffo_pancake: 'Waffo Pancake',
   alipay: '支付宝',
   wxpay: '微信',
+  admin: '管理员加额',
+  redemption: '兑换码充值',
 };
 
 const TopupHistoryModal = ({ visible, onCancel, t, userId, username }) => {
@@ -158,6 +161,36 @@ const TopupHistoryModal = ({ visible, onCancel, t, userId, username }) => {
     return Number(record?.amount || 0) === 0 && tradeNo.startsWith('sub');
   };
 
+  const isGoldTopup = (record) =>
+    record?.credit_type === 'gold' || record?.quota_type === 'gold';
+
+  const renderTopupAmount = (amount, record) => {
+    if (isSubscriptionTopup(record)) {
+      return (
+        <Tag color='purple' shape='circle' size='small'>
+          {t('订阅套餐')}
+        </Tag>
+      );
+    }
+
+    const rawAmount = Number(amount || 0);
+    const displayAmount = isGoldTopup(record)
+      ? `${renderGoldQuota(rawAmount)} ${t('金币')}`
+      : renderQuota(rawAmount);
+
+    return (
+      <div className='flex flex-col gap-1'>
+        <span className='flex items-center gap-1'>
+          <Coins size={16} />
+          <Text strong>{displayAmount}</Text>
+        </span>
+        <Text type='tertiary' size='small'>
+          {t('原生额度')}：{rawAmount.toLocaleString()}
+        </Text>
+      </div>
+    );
+  };
+
   // 检查是否为管理员
   const userIsAdmin = useMemo(() => isAdmin(), []);
 
@@ -189,27 +222,15 @@ const TopupHistoryModal = ({ visible, onCancel, t, userId, username }) => {
         title: t('充值额度'),
         dataIndex: 'amount',
         key: 'amount',
-        render: (amount, record) => {
-          if (isSubscriptionTopup(record)) {
-            return (
-              <Tag color='purple' shape='circle' size='small'>
-                {t('订阅套餐')}
-              </Tag>
-            );
-          }
-          return (
-            <span className='flex items-center gap-1'>
-              <Coins size={16} />
-              <Text>{amount}</Text>
-            </span>
-          );
-        },
+        render: renderTopupAmount,
       },
       {
         title: t('支付金额'),
         dataIndex: 'money',
         key: 'money',
-        render: (money) => <Text type='danger'>¥{money.toFixed(2)}</Text>,
+        render: (money) => (
+          <Text type='danger'>¥{Number(money || 0).toFixed(2)}</Text>
+        ),
       },
       {
         title: t('状态'),

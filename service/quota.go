@@ -146,7 +146,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
 	}
 
-	err = PostConsumeQuota(relayInfo, quota, 0, false)
+	_, err = PostConsumeQuota(relayInfo, quota, 0, false)
 	if err != nil {
 		return err
 	}
@@ -403,40 +403,53 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	return nil
 }
 
-func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
+func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (int, error) {
+	if relayInfo == nil {
+		return 0, errors.New("relay info is nil")
+	}
+	rewardableConsumed := 0
 
 	// 1) Consume from wallet quota OR subscription item
-	if relayInfo != nil && relayInfo.BillingSource == BillingSourceSubscription {
+	if relayInfo.BillingSource == BillingSourceSubscription {
 		if relayInfo.SubscriptionId == 0 {
-			return errors.New("subscription id is missing")
+			return 0, errors.New("subscription id is missing")
 		}
 		delta := int64(quota)
 		if delta != 0 {
 			if err := model.PostConsumeUserSubscriptionDelta(relayInfo.SubscriptionId, delta); err != nil {
-				return err
+				return 0, err
 			}
 			relayInfo.SubscriptionPostDelta += delta
 		}
 	} else {
-		// Wallet
 		if quota > 0 {
-			err = model.DecreaseUserQuota(relayInfo.UserId, quota, false)
-		} else {
-			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
-		}
-		if err != nil {
-			return err
+			result, err := model.ConsumeUserWalletQuota(relayInfo.UserId, quota)
+			if err != nil {
+				return 0, err
+			}
+			addWalletConsumeResultToRelayInfo(relayInfo, result)
+			rewardableConsumed = result.RewardableConsumed
+		} else if quota < 0 {
+			source := relayInfoWalletConsumeResult(relayInfo)
+			refund := splitWalletRefund(&source, -quota)
+			if err := model.RefundUserWalletQuota(relayInfo.UserId, refund); err != nil {
+				return 0, err
+			}
+			setRelayInfoWalletConsumeResult(relayInfo, source)
 		}
 	}
 
 	if !relayInfo.IsPlayground {
 		if quota > 0 {
-			err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+			err := model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+			if err != nil {
+				return 0, err
+			}
 		} else {
-			err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
-		}
-		if err != nil {
-			return err
+			err := model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
+			if err != nil {
+				return 0, err
+			}
 		}
 	}
 
@@ -446,7 +459,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		}
 	}
 
-	return nil
+	return rewardableConsumed, nil
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {

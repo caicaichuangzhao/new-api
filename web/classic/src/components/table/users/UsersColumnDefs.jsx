@@ -35,6 +35,7 @@ import {
   renderQuota,
   timestamp2string,
 } from '../../../helpers';
+import { renderGoldQuota } from '../../../helpers/quota';
 
 const renderTimestamp = (text) => (text ? timestamp2string(text) : '-');
 
@@ -145,6 +146,7 @@ const renderQuotaUsage = (text, record, t) => {
   const { Paragraph } = Typography;
   const used = parseInt(record.used_quota) || 0;
   const remain = parseInt(record.quota) || 0;
+  const gold = parseInt(record.gold_quota) || 0;
   const total = used + remain;
   const percent = total > 0 ? (remain / total) * 100 : 0;
   const popoverContent = (
@@ -158,6 +160,9 @@ const renderQuotaUsage = (text, record, t) => {
       <Paragraph copyable={{ content: renderQuota(total) }}>
         {t('总额度')}: {renderQuota(total)}
       </Paragraph>
+      <Paragraph copyable={{ content: renderGoldQuota(gold) }}>
+        {t('金币')}: {renderGoldQuota(gold)}
+      </Paragraph>
     </div>
   );
   return (
@@ -165,6 +170,11 @@ const renderQuotaUsage = (text, record, t) => {
       <Tag color='white' shape='circle'>
         <div className='flex flex-col items-end'>
           <span className='text-xs leading-none'>{`${renderQuota(remain)} / ${renderQuota(total)}`}</span>
+          {gold > 0 && (
+            <span className='text-xs leading-none mt-1'>
+              {t('金币')}: {renderGoldQuota(gold)}
+            </span>
+          )}
           <Progress
             percent={percent}
             aria-label='quota usage'

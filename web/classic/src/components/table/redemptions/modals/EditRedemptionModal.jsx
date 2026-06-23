@@ -30,6 +30,8 @@ import {
 import {
   quotaToDisplayAmount,
   displayAmountToQuota,
+  goldAmountToQuota,
+  goldQuotaToAmount,
 } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -67,10 +69,25 @@ const EditRedemptionModal = (props) => {
   const getInitValues = () => ({
     name: '',
     quota: 100000,
+    quota_type: 'quota',
     amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
     count: 1,
     expired_time: null,
   });
+
+  const quotaTypeToAmount = (quotaType, quota) => {
+    const amount =
+      quotaType === 'gold'
+        ? goldQuotaToAmount(quota || 0)
+        : quotaToDisplayAmount(quota || 0);
+    return Number(amount.toFixed(6));
+  };
+
+  const amountToQuota = (quotaType, amount) => {
+    return quotaType === 'gold'
+      ? goldAmountToQuota(amount)
+      : displayAmountToQuota(amount);
+  };
 
   const handleCancel = () => {
     props.handleClose();
@@ -86,7 +103,8 @@ const EditRedemptionModal = (props) => {
       } else {
         data.expired_time = new Date(data.expired_time * 1000);
       }
-      data.amount = Number(quotaToDisplayAmount(data.quota || 0).toFixed(6));
+      data.quota_type = data.quota_type === 'gold' ? 'gold' : 'quota';
+      data.amount = quotaTypeToAmount(data.quota_type, data.quota || 0);
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
     } else {
       showError(message);
@@ -112,7 +130,12 @@ const EditRedemptionModal = (props) => {
     setLoading(true);
     let localInputs = { ...values };
     localInputs.count = parseInt(localInputs.count) || 0;
-    localInputs.quota = displayAmountToQuota(localInputs.amount);
+    localInputs.quota_type =
+      localInputs.quota_type === 'gold' ? 'gold' : 'quota';
+    localInputs.quota = amountToQuota(
+      localInputs.quota_type,
+      localInputs.amount,
+    );
     if (localInputs.quota <= 0) {
       showError(t('请输入金额'));
       setLoading(false);
@@ -299,11 +322,46 @@ const EditRedemptionModal = (props) => {
 
                   <Row gutter={12}>
                     <Col span={24}>
+                      <Form.Select
+                        field='quota_type'
+                        label={t('兑换类型')}
+                        style={{ width: '100%' }}
+                        optionList={[
+                          { label: t('余额兑换码'), value: 'quota' },
+                          { label: t('金币兑换码'), value: 'gold' },
+                        ]}
+                        onChange={(value) => {
+                          const quotaType = value === 'gold' ? 'gold' : 'quota';
+                          const quota = formApiRef.current?.getValue('quota') || 0;
+                          formApiRef.current?.setValue('quota_type', quotaType);
+                          formApiRef.current?.setValue(
+                            'amount',
+                            quotaTypeToAmount(quotaType, quota),
+                          );
+                        }}
+                      />
+                    </Col>
+                    <Col span={24}>
                       <Form.InputNumber
                         field='amount'
-                        label={t('金额')}
-                        prefix={getCurrencyConfig().symbol}
-                        placeholder={t('输入金额')}
+                        label={
+                          values.quota_type === 'gold'
+                            ? t('金币数量')
+                            : t('金额')
+                        }
+                        prefix={
+                          values.quota_type === 'gold'
+                            ? undefined
+                            : getCurrencyConfig().symbol
+                        }
+                        suffix={
+                          values.quota_type === 'gold' ? t('金币') : undefined
+                        }
+                        placeholder={
+                          values.quota_type === 'gold'
+                            ? t('输入金币数量')
+                            : t('输入金额')
+                        }
                         precision={6}
                         min={0}
                         step={0.000001}
@@ -313,7 +371,7 @@ const EditRedemptionModal = (props) => {
                           formApiRef.current?.setValue('amount', amount);
                           formApiRef.current?.setValue(
                             'quota',
-                            displayAmountToQuota(amount),
+                            amountToQuota(values.quota_type, amount),
                           );
                         }}
                         showClear
@@ -348,7 +406,7 @@ const EditRedemptionModal = (props) => {
                             formApiRef.current?.setValue('quota', quota);
                             formApiRef.current?.setValue(
                               'amount',
-                              Number(quotaToDisplayAmount(quota).toFixed(6)),
+                              quotaTypeToAmount(values.quota_type, quota),
                             );
                           }}
                           style={{ width: '100%' }}

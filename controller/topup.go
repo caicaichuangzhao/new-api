@@ -176,6 +176,62 @@ func getPayMoney(amount int64, group string) float64 {
 	return payMoney.InexactFloat64()
 }
 
+func getTopUpDiscount(originalAmount int64) float64 {
+	discount := 1.0
+	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(originalAmount)]; ok && ds > 0 {
+		discount = ds
+	}
+	if discount > 1 {
+		return 1
+	}
+	return discount
+}
+
+func getTopUpRewardableMultiplier(group string, originalAmount int64) float64 {
+	groupRatio := common.GetTopupGroupRatio(group)
+	if groupRatio <= 0 {
+		groupRatio = 1
+	}
+	multiplier := getTopUpDiscount(originalAmount) * groupRatio
+	if multiplier > 1 {
+		return 1
+	}
+	return multiplier
+}
+
+func topUpQuotaForDisplayAmount(amount int64) int {
+	if amount <= 0 {
+		return 0
+	}
+	return int(decimal.NewFromInt(amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).IntPart())
+}
+
+func rewardableQuotaForCreditedQuota(creditedQuota int, multiplier float64) int {
+	if creditedQuota <= 0 || multiplier <= 0 {
+		return 0
+	}
+	rewardable := int(decimal.NewFromInt(int64(creditedQuota)).Mul(decimal.NewFromFloat(multiplier)).IntPart())
+	if rewardable > creditedQuota {
+		return creditedQuota
+	}
+	return rewardable
+}
+
+func rewardableQuotaForDisplayAmount(amount int64, multiplier float64) int {
+	return rewardableQuotaForCreditedQuota(topUpQuotaForDisplayAmount(amount), multiplier)
+}
+
+func rewardableQuotaForPaidUSD(paidUSD float64, creditedQuota int) int {
+	if paidUSD <= 0 || creditedQuota <= 0 {
+		return 0
+	}
+	paidQuota := int(decimal.NewFromFloat(paidUSD).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).IntPart())
+	if paidQuota > creditedQuota {
+		return creditedQuota
+	}
+	return paidQuota
+}
+
 func getMinTopup() int64 {
 	minTopup := operation_setting.MinTopUp
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
@@ -246,14 +302,15 @@ func RequestEpay(c *gin.Context) {
 		amount = dAmount.Div(dQuotaPerUnit).IntPart()
 	}
 	topUp := &model.TopUp{
-		UserId:          id,
-		Amount:          amount,
-		Money:           payMoney,
-		TradeNo:         tradeNo,
-		PaymentMethod:   req.PaymentMethod,
-		PaymentProvider: model.PaymentProviderEpay,
-		CreateTime:      time.Now().Unix(),
-		Status:          common.TopUpStatusPending,
+		UserId:           id,
+		Amount:           amount,
+		Money:            payMoney,
+		TradeNo:          tradeNo,
+		PaymentMethod:    req.PaymentMethod,
+		PaymentProvider:  model.PaymentProviderEpay,
+		RewardableAmount: rewardableQuotaForDisplayAmount(amount, getTopUpRewardableMultiplier(group, req.Amount)),
+		CreateTime:       time.Now().Unix(),
+		Status:           common.TopUpStatusPending,
 	}
 	err = topUp.Insert()
 	if err != nil {
@@ -401,6 +458,10 @@ func EpayNotify(c *gin.Context) {
 			err = model.IncreaseUserQuota(topUp.UserId, quotaToAdd, true)
 			if err != nil {
 				logger.LogError(c.Request.Context(), fmt.Sprintf("易支付 更新用户额度失败 trade_no=%s user_id=%d client_ip=%s quota_to_add=%d error=%q topup=%q", topUp.TradeNo, topUp.UserId, c.ClientIP(), quotaToAdd, err.Error(), common.GetJsonString(topUp)))
+				return
+			}
+			if err := model.MarkTopUpCreditClassification(topUp, quotaToAdd); err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("易支付 分类充值额度失败 trade_no=%s user_id=%d error=%q", topUp.TradeNo, topUp.UserId, err.Error()))
 				return
 			}
 			if _, _, rewardErr := model.GrantAffiliateFirstTopUpReward(topUp, quotaToAdd); rewardErr != nil {

@@ -296,6 +296,9 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if err := ReconcileAffiliateInviteCounts(); err != nil {
+		common.SysLog("failed to reconcile affiliate invite counts: " + err.Error())
+	}
 	return nil
 }
 
@@ -366,6 +369,9 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := ReconcileAffiliateInviteCounts(); err != nil {
+		common.SysLog("failed to reconcile affiliate invite counts: " + err.Error())
 	}
 	common.SysLog("database migrated")
 	return nil

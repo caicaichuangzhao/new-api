@@ -20,7 +20,7 @@ import { useState, useCallback } from 'react'
 import i18next from 'i18next'
 import { toast } from 'sonner'
 import { getSelf } from '@/lib/api'
-import { formatQuota } from '@/lib/format'
+import { formatGoldQuota, formatQuota } from '@/lib/format'
 import { redeemTopupCode } from '../api'
 
 // ============================================================================
@@ -42,9 +42,13 @@ export function useRedemption() {
 
       if (response.success && response.data) {
         const quotaAdded = response.data
+        const formattedAmount =
+          response.quota_type === 'gold'
+            ? `${formatGoldQuota(quotaAdded)} ${i18next.t('Gold')}`
+            : formatQuota(quotaAdded)
         toast.success(
           i18next.t('Redemption successful! Added: {{quota}}', {
-            quota: formatQuota(quotaAdded),
+            quota: formattedAmount,
           })
         )
         await getSelf()

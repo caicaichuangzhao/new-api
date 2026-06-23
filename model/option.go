@@ -133,6 +133,7 @@ func InitOptionMap() {
 	common.OptionMap["QuotaForInvitee"] = strconv.Itoa(common.QuotaForInvitee)
 	common.OptionMap["AffFirstTopUpRewardRatio"] = strconv.FormatFloat(common.AffFirstTopUpRewardRatio, 'f', -1, 64)
 	common.OptionMap["AffConsumptionRewardRatio"] = strconv.FormatFloat(common.AffConsumptionRewardRatio, 'f', -1, 64)
+	common.OptionMap["GoldQuotaExchangeRate"] = strconv.FormatFloat(common.GoldQuotaExchangeRate, 'f', -1, 64)
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -210,12 +211,16 @@ func UpdateOption(key string, value string) error {
 		Key: key,
 	}
 	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
+	if err := DB.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+		return err
+	}
 	option.Value = value
 	// Save is a combination function.
 	// If save value does not contain primary key, it will execute Create,
 	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
+	if err := DB.Save(&option).Error; err != nil {
+		return err
+	}
 	// Update OptionMap
 	return updateOptionMap(key, value)
 }
@@ -506,6 +511,11 @@ func updateOptionMap(key string, value string) (err error) {
 		common.AffFirstTopUpRewardRatio, _ = strconv.ParseFloat(value, 64)
 	case "AffConsumptionRewardRatio":
 		common.AffConsumptionRewardRatio, _ = strconv.ParseFloat(value, 64)
+	case "GoldQuotaExchangeRate":
+		common.GoldQuotaExchangeRate, _ = strconv.ParseFloat(value, 64)
+		if common.GoldQuotaExchangeRate <= 0 {
+			common.GoldQuotaExchangeRate = 1
+		}
 	case "QuotaRemindThreshold":
 		common.QuotaRemindThreshold, _ = strconv.Atoi(value)
 	case "PreConsumedQuota":

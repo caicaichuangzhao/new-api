@@ -46,6 +46,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	}
 	delta := actualQuota - s.preConsumedQuota
 	if delta == 0 {
+		s.syncRelayInfo()
 		s.settled = true
 		return nil
 	}
@@ -74,6 +75,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if s.funding.Source() == BillingSourceSubscription {
 		s.relayInfo.SubscriptionPostDelta += int64(delta)
 	}
+	s.syncRelayInfo()
 	s.settled = true
 	return tokenErr
 }
@@ -147,6 +149,13 @@ func (s *BillingSession) needsRefundLocked() bool {
 // GetPreConsumedQuota 返回实际预扣的额度。
 func (s *BillingSession) GetPreConsumedQuota() int {
 	return s.preConsumedQuota
+}
+
+func (s *BillingSession) GetRewardableConsumedQuota() int {
+	if funding, ok := s.funding.(*WalletFunding); ok {
+		return funding.RewardableConsumed()
+	}
+	return 0
 }
 
 func (s *BillingSession) Reserve(targetQuota int) error {
@@ -232,10 +241,16 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 func (s *BillingSession) reserveFunding(delta int) error {
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
-		if err := model.DecreaseUserQuota(funding.userId, delta, false); err != nil {
+		result, err := model.ConsumeUserWalletQuota(funding.userId, delta)
+		if err != nil {
 			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 		}
 		funding.consumed += delta
+		funding.rewardableConsumed += result.RewardableConsumed
+		funding.consumeResult.QuotaConsumed += result.QuotaConsumed
+		funding.consumeResult.GoldQuotaConsumed += result.GoldQuotaConsumed
+		funding.consumeResult.GoldQuotaEquivalentConsume += result.GoldQuotaEquivalentConsume
+		funding.consumeResult.RewardableConsumed += result.RewardableConsumed
 		return nil
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
@@ -256,10 +271,8 @@ func (s *BillingSession) reserveFunding(delta int) error {
 func (s *BillingSession) rollbackFundingReserve(delta int) {
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
-		if err := model.IncreaseUserQuota(funding.userId, delta, false); err != nil {
+		if err := funding.refundPartial(delta); err != nil {
 			common.SysLog("error rolling back wallet funding reserve: " + err.Error())
-		} else {
-			funding.consumed -= delta
 		}
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(delta)); err != nil {
@@ -328,9 +341,15 @@ func (s *BillingSession) syncRelayInfo() {
 		info.SubscriptionAmountUsedAfterPreConsume = sub.AmountUsedAfter + int64(s.extraReserved)
 		info.SubscriptionPlanId = sub.PlanId
 		info.SubscriptionPlanTitle = sub.PlanTitle
+		setRelayInfoWalletConsumeResult(info, model.WalletConsumeResult{})
+	} else if wallet, ok := s.funding.(*WalletFunding); ok {
+		setRelayInfoWalletConsumeResult(info, wallet.consumeResult)
+		info.SubscriptionId = 0
+		info.SubscriptionPreConsumed = 0
 	} else {
 		info.SubscriptionId = 0
 		info.SubscriptionPreConsumed = 0
+		setRelayInfoWalletConsumeResult(info, model.WalletConsumeResult{})
 	}
 }
 

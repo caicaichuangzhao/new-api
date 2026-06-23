@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/QuantumNous/new-api/logger"
@@ -30,9 +31,19 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 // SettleBilling — 后结算辅助函数
 // ---------------------------------------------------------------------------
 
+func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) error {
+	return settleBilling(ctx, relayInfo, actualQuota, true)
+}
+
+// SettleBillingWithoutAffiliate 执行计费结算但不立即发放邀请消费返现。
+// 异步任务需要等任务最终成功后，按最终钱包来源明细发放返现，避免失败任务产生返利漏洞。
+func SettleBillingWithoutAffiliate(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) error {
+	return settleBilling(ctx, relayInfo, actualQuota, false)
+}
+
 // SettleBilling 执行计费结算。如果 RelayInfo 上有 BillingSession 则通过 session 结算，
 // 否则回退到旧的 PostConsumeQuota 路径（兼容按次计费等场景）。
-func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) error {
+func settleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int, grantAffiliate bool) error {
 	if relayInfo.Billing != nil {
 		preConsumed := relayInfo.Billing.GetPreConsumedQuota()
 		delta := actualQuota - preConsumed
@@ -66,7 +77,9 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			} else {
 				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
 			}
-			grantAffiliateConsumptionReward(ctx, relayInfo, actualQuota)
+			if grantAffiliate {
+				GrantAffiliateConsumptionRewardForRelay(ctx, relayInfo, relayInfo.Billing.GetRewardableConsumedQuota())
+			}
 		}
 		return nil
 	}
@@ -74,19 +87,23 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 	// 回退：无 BillingSession 时使用旧路径
 	quotaDelta := actualQuota - relayInfo.FinalPreConsumedQuota
 	if quotaDelta != 0 {
-		if err := PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true); err != nil {
+		rewardableConsumed, err := PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true)
+		if err != nil {
 			return err
 		}
+		if grantAffiliate {
+			GrantAffiliateConsumptionRewardForRelay(ctx, relayInfo, rewardableConsumed)
+		}
+		return nil
 	}
-	grantAffiliateConsumptionReward(ctx, relayInfo, actualQuota)
 	return nil
 }
 
-func grantAffiliateConsumptionReward(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) {
-	if relayInfo == nil || actualQuota <= 0 {
+func GrantAffiliateConsumptionRewardForRelay(ctx context.Context, relayInfo *relaycommon.RelayInfo, rewardableQuota int) {
+	if relayInfo == nil || rewardableQuota <= 0 {
 		return
 	}
-	if _, _, err := model.GrantAffiliateConsumptionReward(relayInfo.UserId, actualQuota, relayInfo.RequestId); err != nil {
-		logger.LogError(ctx, fmt.Sprintf("邀请用户消费返现失败 user_id=%d request_id=%s quota=%d error=%q", relayInfo.UserId, relayInfo.RequestId, actualQuota, err.Error()))
+	if _, _, err := model.GrantAffiliateConsumptionReward(relayInfo.UserId, rewardableQuota, relayInfo.RequestId); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("邀请用户消费返现失败 user_id=%d request_id=%s quota=%d error=%q", relayInfo.UserId, relayInfo.RequestId, rewardableQuota, err.Error()))
 	}
 }

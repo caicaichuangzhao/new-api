@@ -24,7 +24,12 @@ import { Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
-import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
+import {
+  formatGoldQuota,
+  formatQuota,
+  parseGoldAmountToQuotaUnits,
+  parseQuotaFromDollars,
+} from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -126,6 +131,9 @@ export function UsersMutateDrawer({
   const tokensOnly = currencyMeta.kind === 'tokens'
 
   const currentQuotaRaw = form.watch('quota_dollars') || 0
+  const currentGoldAmount = form.watch('gold_quota') || 0
+  const currentGoldQuota = parseGoldAmountToQuotaUnits(currentGoldAmount)
+  const currentRewardableQuota = form.watch('rewardable_quota') || 0
 
   const onSubmit = async (data: UserFormValues) => {
     if (!isUpdate) {
@@ -395,6 +403,25 @@ export function UsersMutateDrawer({
                     )}
                   />
 
+                  <div className='grid gap-3 sm:grid-cols-2'>
+                    <div className='rounded-md border p-3'>
+                      <Label className='text-muted-foreground text-xs'>
+                        {t('Gold')}
+                      </Label>
+                      <div className='mt-1 text-sm font-medium'>
+                        {formatGoldQuota(currentGoldQuota)}
+                      </div>
+                    </div>
+                    <div className='rounded-md border p-3'>
+                      <Label className='text-muted-foreground text-xs'>
+                        {t('Rewardable Balance')}
+                      </Label>
+                      <div className='mt-1 text-sm font-medium'>
+                        {formatQuota(currentRewardableQuota)}
+                      </div>
+                    </div>
+                  </div>
+
                   <FormField
                     control={form.control}
                     name='remark'
@@ -467,6 +494,7 @@ export function UsersMutateDrawer({
           onOpenChange={setQuotaDialogOpen}
           userId={currentRow.id}
           currentQuota={parseQuotaFromDollars(currentQuotaRaw || 0)}
+          currentGoldQuota={currentGoldQuota}
           onSuccess={refreshUserData}
         />
       )}

@@ -544,6 +544,7 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 	// 0. 按次计费的任务不做差额结算
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
+		grantTaskAffiliateConsumptionReward(ctx, task)
 		return
 	}
 	// 1. 优先让 adaptor 决定最终额度
@@ -557,4 +558,5 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		return
 	}
 	// 3. 无调整，保持预扣额度
+	grantTaskAffiliateConsumptionReward(ctx, task)
 }

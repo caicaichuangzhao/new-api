@@ -88,7 +88,7 @@ const InvitationCard = ({
                   <Text strong style={{ color: 'white', fontSize: '16px' }}>
                     {t('收益统计')}
                   </Text>
-                  <div className='flex flex-wrap justify-end gap-2'>
+                  <div className='invitation-cover-actions flex flex-wrap justify-end gap-2'>
                     <Button
                       type='primary'
                       theme='solid'
@@ -99,7 +99,7 @@ const InvitationCard = ({
                         userState?.user?.aff_quota <= 0
                       }
                       onClick={() => setOpenTransfer(true)}
-                      className='!rounded-lg'
+                      className='invitation-cover-action invitation-cover-action-primary !rounded-lg'
                     >
                       <Zap size={12} className='mr-1' />
                       {t('划转')}
@@ -114,7 +114,7 @@ const InvitationCard = ({
                         userState?.user?.aff_quota <= 0
                       }
                       onClick={() => setOpenWithdrawal(true)}
-                      className='!rounded-lg'
+                      className='invitation-cover-action !rounded-lg'
                     >
                       <WalletCards size={12} className='mr-1' />
                       {t('提现')}
@@ -124,7 +124,7 @@ const InvitationCard = ({
                       theme='light'
                       size='small'
                       onClick={() => setOpenWithdrawalRecords(true)}
-                      className='!rounded-lg'
+                      className='invitation-cover-action !rounded-lg'
                     >
                       <ListChecks size={12} className='mr-1' />
                       {t('记录')}

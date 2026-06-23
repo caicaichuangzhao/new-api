@@ -45,3 +45,22 @@ export const displayAmountToQuota = (amount) => {
   const usd = type === 'USD' ? abs : abs / (rate || 1);
   return sign * Math.round(usd * getQuotaPerUnit());
 };
+
+export const goldAmountToQuota = (amount) => {
+  const val = Number(amount || 0);
+  if (!Number.isFinite(val) || val === 0) return 0;
+  return Math.round(val * getQuotaPerUnit());
+};
+
+export const goldQuotaToAmount = (quota) => {
+  const q = Number(quota || 0);
+  if (!Number.isFinite(q) || q === 0) return 0;
+  return q / getQuotaPerUnit();
+};
+
+export const renderGoldQuota = (quota) => {
+  const amount = goldQuotaToAmount(quota);
+  return amount.toLocaleString(undefined, {
+    maximumFractionDigits: Math.abs(amount) >= 1 ? 2 : 6,
+  });
+};

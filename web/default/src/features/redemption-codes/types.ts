@@ -29,6 +29,7 @@ export const redemptionSchema = z.object({
   key: z.string(),
   status: z.number(), // 1: enabled, 2: disabled, 3: used
   quota: z.number(),
+  quota_type: z.string().optional(),
   created_time: z.number(),
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
@@ -36,6 +37,7 @@ export const redemptionSchema = z.object({
 })
 
 export type Redemption = z.infer<typeof redemptionSchema>
+export type RedemptionQuotaType = 'quota' | 'gold'
 
 // ============================================================================
 // API Request/Response Types
@@ -73,6 +75,7 @@ export interface RedemptionFormData {
   id?: number
   name: string
   quota: number
+  quota_type?: RedemptionQuotaType
   expired_time: number
   count?: number // Only for create
   status?: number // Only for status update

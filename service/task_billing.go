@@ -90,9 +90,21 @@ func taskAdjustFunding(task *model.Task, delta int) error {
 		return model.PostConsumeUserSubscriptionDelta(task.PrivateData.SubscriptionId, int64(delta))
 	}
 	if delta > 0 {
-		return model.DecreaseUserQuota(task.UserId, delta, false)
+		result, err := model.ConsumeUserWalletQuota(task.UserId, delta)
+		if err != nil {
+			return err
+		}
+		task.PrivateData.WalletConsume.QuotaConsumed += result.QuotaConsumed
+		task.PrivateData.WalletConsume.GoldQuotaConsumed += result.GoldQuotaConsumed
+		task.PrivateData.WalletConsume.GoldQuotaEquivalentConsume += result.GoldQuotaEquivalentConsume
+		task.PrivateData.WalletConsume.RewardableConsumed += result.RewardableConsumed
+		return nil
 	}
-	return model.IncreaseUserQuota(task.UserId, -delta, false)
+	if task.PrivateData.WalletConsume.TotalConsumed() == 0 {
+		return model.IncreaseUserQuota(task.UserId, -delta, false)
+	}
+	refund := splitWalletRefund(&task.PrivateData.WalletConsume, -delta)
+	return model.RefundUserWalletQuota(task.UserId, refund)
 }
 
 // taskAdjustTokenQuota 调整任务的令牌额度，delta > 0 表示扣费，delta < 0 表示退还。
@@ -139,6 +151,21 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 	return other
 }
 
+func persistTaskBillingState(ctx context.Context, task *model.Task) {
+	if task == nil || task.ID <= 0 {
+		return
+	}
+	if err := model.DB.Model(&model.Task{}).
+		Where("id = ?", task.ID).
+		Select("quota", "private_data").
+		Updates(map[string]interface{}{
+			"quota":        task.Quota,
+			"private_data": task.PrivateData,
+		}).Error; err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("保存任务计费状态失败 (task=%s): %s", task.TaskID, err.Error()))
+	}
+}
+
 // taskModelName 从 BillingContext 或 Properties 中获取模型名称。
 func taskModelName(task *model.Task) string {
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.OriginModelName != "" {
@@ -163,6 +190,8 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 
 	// 2. 退还令牌额度
 	taskAdjustTokenQuota(ctx, task, -quota)
+	task.Quota = 0
+	persistTaskBillingState(ctx, task)
 
 	// 3. 记录日志
 	other := taskBillingOther(task)
@@ -181,6 +210,15 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 	})
 }
 
+func grantTaskAffiliateConsumptionReward(ctx context.Context, task *model.Task) {
+	if task == nil || task.UserId <= 0 || task.PrivateData.WalletConsume.RewardableConsumed <= 0 {
+		return
+	}
+	if _, _, err := model.GrantAffiliateTaskConsumptionReward(task.UserId, task.PrivateData.WalletConsume.RewardableConsumed, task.TaskID); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("任务邀请消费返现失败 user_id=%d task=%s quota=%d error=%q", task.UserId, task.TaskID, task.PrivateData.WalletConsume.RewardableConsumed, err.Error()))
+	}
+}
+
 // RecalculateTaskQuota 通用的异步差额结算。
 // actualQuota 是任务完成后的实际应扣额度，与预扣额度 (task.Quota) 做差额结算。
 // reason 用于日志记录（例如 "token重算" 或 "adaptor调整"）。
@@ -194,6 +232,8 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	if quotaDelta == 0 {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 预扣费准确（%s，%s）",
 			task.TaskID, logger.LogQuota(actualQuota), reason))
+		grantTaskAffiliateConsumptionReward(ctx, task)
+		persistTaskBillingState(ctx, task)
 		return
 	}
 
@@ -215,6 +255,8 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	taskAdjustTokenQuota(ctx, task, quotaDelta)
 
 	task.Quota = actualQuota
+	grantTaskAffiliateConsumptionReward(ctx, task)
+	persistTaskBillingState(ctx, task)
 
 	var logType int
 	var logQuota int

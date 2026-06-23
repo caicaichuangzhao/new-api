@@ -121,6 +121,10 @@ type RelayInfo struct {
 	UserSetting            dto.UserSetting
 	UserEmail              string
 	UserQuota              int
+	WalletQuotaConsumed              int
+	WalletGoldQuotaConsumed          int
+	WalletGoldQuotaEquivalentConsume int
+	WalletRewardableConsumed         int
 	RelayFormat            types.RelayFormat
 	SendResponseCount      int
 	ReceivedResponseCount  int

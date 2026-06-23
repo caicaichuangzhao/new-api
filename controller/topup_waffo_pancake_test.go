@@ -89,3 +89,26 @@ func TestGetWaffoPancakePayMoney(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTopUpRewardableMultiplierIncludesDiscountAndGroupRatio(t *testing.T) {
+	originalDiscounts := make(map[int]float64, len(operation_setting.GetPaymentSetting().AmountDiscount))
+	for k, v := range operation_setting.GetPaymentSetting().AmountDiscount {
+		originalDiscounts[k] = v
+	}
+	originalTopupGroupRatio := common.TopupGroupRatio2JSONString()
+
+	t.Cleanup(func() {
+		operation_setting.GetPaymentSetting().AmountDiscount = originalDiscounts
+		require.NoError(t, common.UpdateTopupGroupRatioByJSONString(originalTopupGroupRatio))
+	})
+
+	operation_setting.GetPaymentSetting().AmountDiscount = map[int]float64{
+		10: 0.8,
+		20: 0.9,
+	}
+	require.NoError(t, common.UpdateTopupGroupRatioByJSONString(`{"default":1,"promo":0.5,"vip":1.5}`))
+
+	require.InDelta(t, 0.4, getTopUpRewardableMultiplier("promo", 10), 0.000001)
+	require.InDelta(t, 1, getTopUpRewardableMultiplier("vip", 20), 0.000001)
+	require.InDelta(t, 1, getTopUpRewardableMultiplier("default", 30), 0.000001)
+}

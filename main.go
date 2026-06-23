@@ -288,6 +288,12 @@ func InitResources() error {
 
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
+	if err := model.BackfillRedemptionTopUps(); err != nil {
+		common.SysLog("failed to backfill redemption topups: " + err.Error())
+	}
+	if err := model.BackfillAffiliateFirstTopUpRewards(); err != nil {
+		common.SysLog("failed to backfill affiliate first topup rewards: " + err.Error())
+	}
 
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()

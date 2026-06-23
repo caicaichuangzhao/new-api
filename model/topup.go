@@ -11,17 +11,29 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	TopUpCreditTypeNormal       = "normal"
+	TopUpCreditTypeFirstTopUp   = "first_topup"
+	TopUpCreditTypeAdmin        = "admin"
+	TopUpCreditTypeRedemption   = "redemption"
+	TopUpCreditTypeGold         = "gold"
+	TopUpCreditTypeSubscription = "subscription"
+)
+
 type TopUp struct {
-	Id              int     `json:"id"`
-	UserId          int     `json:"user_id" gorm:"index"`
-	Amount          int64   `json:"amount"`
-	Money           float64 `json:"money"`
-	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
-	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CreateTime      int64   `json:"create_time"`
-	CompleteTime    int64   `json:"complete_time"`
-	Status          string  `json:"status"`
+	Id               int     `json:"id"`
+	UserId           int     `json:"user_id" gorm:"index"`
+	Amount           int64   `json:"amount"`
+	Money            float64 `json:"money"`
+	TradeNo          string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod    string  `json:"payment_method" gorm:"type:varchar(50)"`
+	PaymentProvider  string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	CreditType       string  `json:"credit_type" gorm:"type:varchar(32);default:'normal'"`
+	RewardEligible   bool    `json:"reward_eligible" gorm:"default:false"`
+	RewardableAmount int     `json:"rewardable_amount" gorm:"default:0"`
+	CreateTime       int64   `json:"create_time"`
+	CompleteTime     int64   `json:"complete_time"`
+	Status           string  `json:"status"`
 }
 
 type TopUpFilter struct {
@@ -41,6 +53,8 @@ const (
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
 	PaymentMethodBalance      = "balance"
+	PaymentMethodAdmin        = "admin"
+	PaymentMethodRedemption   = "redemption"
 )
 
 const (
@@ -50,6 +64,8 @@ const (
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
 	PaymentProviderBalance      = "balance"
+	PaymentProviderAdmin        = "admin"
+	PaymentProviderRedemption   = "redemption"
 )
 
 var (
@@ -62,6 +78,197 @@ func (topUp *TopUp) Insert() error {
 	var err error
 	err = DB.Create(topUp).Error
 	return err
+}
+
+func createSuccessfulTopUpAtTx(tx *gorm.DB, userId int, amount int64, money float64, tradeNo string, paymentMethod string, paymentProvider string, timestamp int64) (*TopUp, error) {
+	if userId <= 0 {
+		return nil, errors.New("无效的 user id")
+	}
+	if amount <= 0 {
+		return nil, errors.New("无效的充值额度")
+	}
+	if tradeNo == "" {
+		return nil, errors.New("未提供支付单号")
+	}
+	if timestamp <= 0 {
+		timestamp = common.GetTimestamp()
+	}
+	topUp := &TopUp{
+		UserId:          userId,
+		Amount:          amount,
+		Money:           money,
+		TradeNo:         tradeNo,
+		PaymentMethod:   paymentMethod,
+		PaymentProvider: paymentProvider,
+		CreditType:      creditTypeForPaymentProvider(paymentProvider),
+		RewardEligible:  false,
+		CreateTime:      timestamp,
+		CompleteTime:    timestamp,
+		Status:          common.TopUpStatusSuccess,
+	}
+	if err := tx.Create(topUp).Error; err != nil {
+		return nil, err
+	}
+	return topUp, nil
+}
+
+func creditTypeForPaymentProvider(paymentProvider string) string {
+	switch paymentProvider {
+	case PaymentProviderAdmin:
+		return TopUpCreditTypeAdmin
+	case PaymentProviderRedemption:
+		return TopUpCreditTypeRedemption
+	case PaymentProviderBalance:
+		return TopUpCreditTypeSubscription
+	default:
+		return TopUpCreditTypeNormal
+	}
+}
+
+func isNormalPaidTopUpProvider(paymentProvider string) bool {
+	switch paymentProvider {
+	case PaymentProviderEpay, PaymentProviderStripe, PaymentProviderCreem, PaymentProviderWaffo, PaymentProviderWaffoPancake:
+		return true
+	default:
+		return false
+	}
+}
+
+func firstTopUpRewardProviders() []string {
+	return []string{
+		PaymentProviderEpay,
+		PaymentProviderStripe,
+		PaymentProviderCreem,
+		PaymentProviderWaffo,
+		PaymentProviderWaffoPancake,
+		PaymentProviderRedemption,
+	}
+}
+
+func isFirstTopUpRewardProvider(paymentProvider string) bool {
+	if isNormalPaidTopUpProvider(paymentProvider) {
+		return true
+	}
+	return paymentProvider == PaymentProviderRedemption
+}
+
+func normalizeTopUpRewardableAmount(creditedQuota int, rewardableAmount int) int {
+	if creditedQuota <= 0 || rewardableAmount <= 0 {
+		return 0
+	}
+	if rewardableAmount > creditedQuota {
+		return creditedQuota
+	}
+	return rewardableAmount
+}
+
+func markTopUpCreditClassificationWithRewardableTx(tx *gorm.DB, topUp *TopUp, creditedQuota int, rewardableAmount int) (bool, error) {
+	if tx == nil || topUp == nil || topUp.Id <= 0 {
+		return false, nil
+	}
+	var firstSuccess TopUp
+	err := tx.Select("id").
+		Where(
+			"user_id = ? AND status = ? AND (payment_provider IN ? OR (payment_provider = ? AND (credit_type <> ? OR credit_type = '' OR credit_type IS NULL)))",
+			topUp.UserId,
+			common.TopUpStatusSuccess,
+			[]string{PaymentProviderEpay, PaymentProviderStripe, PaymentProviderCreem, PaymentProviderWaffo, PaymentProviderWaffoPancake},
+			PaymentProviderRedemption,
+			TopUpCreditTypeGold,
+		).
+		Order("complete_time ASC").
+		Order("create_time ASC").
+		Order("id ASC").
+		First(&firstSuccess).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+
+	isFirst := isFirstTopUpRewardProvider(topUp.PaymentProvider) && firstSuccess.Id == topUp.Id
+	creditType := creditTypeForPaymentProvider(topUp.PaymentProvider)
+	if isFirst && isNormalPaidTopUpProvider(topUp.PaymentProvider) {
+		creditType = TopUpCreditTypeFirstTopUp
+	}
+	rewardEligible := isNormalPaidTopUpProvider(topUp.PaymentProvider) && !isFirst
+	normalizedRewardableAmount := 0
+	if rewardEligible {
+		normalizedRewardableAmount = normalizeTopUpRewardableAmount(creditedQuota, rewardableAmount)
+	}
+	if err := tx.Model(topUp).Updates(map[string]interface{}{
+		"credit_type":       creditType,
+		"reward_eligible":   rewardEligible,
+		"rewardable_amount": normalizedRewardableAmount,
+	}).Error; err != nil {
+		return false, err
+	}
+	topUp.CreditType = creditType
+	topUp.RewardEligible = rewardEligible
+	topUp.RewardableAmount = normalizedRewardableAmount
+	if rewardEligible && normalizedRewardableAmount > 0 {
+		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).
+			Update("rewardable_quota", gorm.Expr("rewardable_quota + ?", normalizedRewardableAmount)).Error; err != nil {
+			return false, err
+		}
+	}
+	return rewardEligible, nil
+}
+
+func markTopUpCreditClassificationTx(tx *gorm.DB, topUp *TopUp, creditedQuota int) (bool, error) {
+	rewardableAmount := topUp.RewardableAmount
+	if rewardableAmount <= 0 && isNormalPaidTopUpProvider(topUp.PaymentProvider) {
+		rewardableAmount = creditedQuota
+	}
+	return markTopUpCreditClassificationWithRewardableTx(tx, topUp, creditedQuota, rewardableAmount)
+}
+
+func MarkTopUpCreditClassification(topUp *TopUp, creditedQuota int) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		_, err := markTopUpCreditClassificationTx(tx, topUp, creditedQuota)
+		return err
+	})
+}
+
+func createSuccessfulTopUpTx(tx *gorm.DB, userId int, amount int64, money float64, tradeNo string, paymentMethod string, paymentProvider string) (*TopUp, error) {
+	return createSuccessfulTopUpAtTx(tx, userId, amount, money, tradeNo, paymentMethod, paymentProvider, common.GetTimestamp())
+}
+
+func AdminAddUserQuota(userId int, quota int, adminId int, callerIp string) error {
+	if userId <= 0 {
+		return errors.New("无效的 user id")
+	}
+	if quota <= 0 {
+		return errors.New("无效的充值额度")
+	}
+
+	var topUp *TopUp
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", quota))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("用户不存在")
+		}
+
+		var err error
+		tradeNo := fmt.Sprintf("ADMUSR%dBY%dNO%s", userId, adminId, common.GetUUID())
+		topUp, err = createSuccessfulTopUpTx(tx, userId, int64(quota), 0, tradeNo, PaymentMethodAdmin, PaymentProviderAdmin)
+		if err != nil {
+			return err
+		}
+
+		if _, err = markTopUpCreditClassificationWithRewardableTx(tx, topUp, quota, topUp.RewardableAmount); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	_ = invalidateUserCache(userId)
+	RecordTopupLog(userId, fmt.Sprintf("管理员增加用户额度 %s", logger.LogQuota(quota)), callerIp, PaymentMethodAdmin, PaymentProviderAdmin)
+	return nil
 }
 
 func (topUp *TopUp) Update() error {
@@ -158,6 +365,10 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 		quotaToAdd = int(decimal.NewFromFloat(quota).IntPart())
 		err = tx.Model(&User{}).Where("id = ?", topUp.UserId).Updates(map[string]interface{}{"stripe_customer": customerId, "quota": gorm.Expr("quota + ?", quotaToAdd)}).Error
 		if err != nil {
+			return err
+		}
+
+		if _, err = markTopUpCreditClassificationWithRewardableTx(tx, topUp, quotaToAdd, topUp.RewardableAmount); err != nil {
 			return err
 		}
 
@@ -470,6 +681,10 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return err
 		}
 
+		if _, err := markTopUpCreditClassificationWithRewardableTx(tx, topUp, quotaToAdd, topUp.RewardableAmount); err != nil {
+			return err
+		}
+
 		var rewardErr error
 		affInviterId, affRewardQuota, rewardErr = GrantAffiliateFirstTopUpRewardTx(tx, topUp, quotaToAdd)
 		if rewardErr != nil {
@@ -557,6 +772,10 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			return err
 		}
 
+		if _, err = markTopUpCreditClassificationWithRewardableTx(tx, topUp, int(quota), topUp.RewardableAmount); err != nil {
+			return err
+		}
+
 		var rewardErr error
 		affInviterId, affRewardQuota, rewardErr = GrantAffiliateFirstTopUpRewardTx(tx, topUp, int(quota))
 		if rewardErr != nil {
@@ -629,6 +848,10 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return err
 		}
 
+		if _, err := markTopUpCreditClassificationWithRewardableTx(tx, topUp, quotaToAdd, topUp.RewardableAmount); err != nil {
+			return err
+		}
+
 		var rewardErr error
 		affInviterId, affRewardQuota, rewardErr = GrantAffiliateFirstTopUpRewardTx(tx, topUp, quotaToAdd)
 		if rewardErr != nil {
@@ -698,6 +921,10 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 		}
 
 		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
+			return err
+		}
+
+		if _, err := markTopUpCreditClassificationWithRewardableTx(tx, topUp, quotaToAdd, topUp.RewardableAmount); err != nil {
 			return err
 		}
 

@@ -44,18 +44,21 @@ const QUOTA_FIELDS = [
   'QuotaForInviter',
   'QuotaForInvitee',
 ];
+const DEFAULT_INPUTS = {
+  QuotaForNewUser: '',
+  PreConsumedQuota: '',
+  QuotaForInviter: '',
+  QuotaForInvitee: '',
+  AffFirstTopUpRewardRatio: 0,
+  AffConsumptionRewardRatio: 0,
+  GoldQuotaExchangeRate: 1,
+  'quota_setting.enable_free_model_pre_consume': true,
+};
+
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
-  const [inputs, setInputs] = useState({
-    QuotaForNewUser: '',
-    PreConsumedQuota: '',
-    QuotaForInviter: '',
-    QuotaForInvitee: '',
-    AffFirstTopUpRewardRatio: 0,
-    AffConsumptionRewardRatio: 0,
-    'quota_setting.enable_free_model_pre_consume': true,
-  });
+  const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [displayInputs, setDisplayInputs] = useState({});
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -251,9 +254,9 @@ export default function SettingsCreditLimit(props) {
   }
 
   useEffect(() => {
-    const currentInputs = {};
-    for (let key in props.options) {
-      if (Object.keys(inputs).includes(key)) {
+    const currentInputs = { ...DEFAULT_INPUTS };
+    for (let key in props.options || {}) {
+      if (Object.prototype.hasOwnProperty.call(DEFAULT_INPUTS, key)) {
         currentInputs[key] = props.options[key];
       }
     }
@@ -347,6 +350,32 @@ export default function SettingsCreditLimit(props) {
                   extraText: t('按被邀请用户每次实际消费额度计算'),
                   placeholder: t('例如：1'),
                 })}
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Slot label={t('金币汇率')} style={{ width: '100%' }}>
+                  <InputNumber
+                    value={Number(inputs.GoldQuotaExchangeRate || 1)}
+                    min={0.0001}
+                    step={0.0001}
+                    precision={6}
+                    placeholder='1'
+                    style={{ width: '100%' }}
+                    onChange={(value) =>
+                      setInputs((prev) => ({
+                        ...prev,
+                        GoldQuotaExchangeRate:
+                          value === '' || value == null ? 1 : value,
+                      }))
+                    }
+                  />
+                  <Text
+                    type='tertiary'
+                    size='small'
+                    style={{ display: 'block', marginTop: 4 }}
+                  >
+                    {t('每 1 原生额度消耗多少金币，填 1 表示 1:1。')}
+                  </Text>
+                </Form.Slot>
               </Col>
             </Row>
             <Row>

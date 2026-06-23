@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
-import { quotaUnitsToDollars } from '@/lib/format'
+import { goldQuotaUnitsToAmount, quotaUnitsToDollars } from '@/lib/format'
 import { DEFAULT_GROUP } from '../constants'
 import { type UserFormData, type User } from '../types'
 
@@ -31,6 +31,8 @@ export const userFormSchema = z.object({
   password: z.string().optional(),
   role: z.number().optional(),
   quota_dollars: z.number().min(0).optional(),
+  gold_quota: z.number().min(0).optional(),
+  rewardable_quota: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
 })
@@ -47,6 +49,8 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   password: '',
   role: 1, // Default to common user
   quota_dollars: 0,
+  gold_quota: 0,
+  rewardable_quota: 0,
   group: DEFAULT_GROUP,
   remark: '',
 }
@@ -91,6 +95,8 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     password: '',
     role: user.role,
     quota_dollars: quotaUnitsToDollars(user.quota),
+    gold_quota: goldQuotaUnitsToAmount(user.gold_quota || 0),
+    rewardable_quota: user.rewardable_quota || 0,
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',
   }

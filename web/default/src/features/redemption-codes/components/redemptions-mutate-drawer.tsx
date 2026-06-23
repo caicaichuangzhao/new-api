@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -34,6 +35,14 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Sheet,
   SheetClose,
@@ -80,7 +89,9 @@ export function RedemptionsMutateDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<RedemptionFormValues>({
-    resolver: zodResolver(getRedemptionFormSchema(t)),
+    resolver: zodResolver(
+      getRedemptionFormSchema(t)
+    ) as unknown as Resolver<RedemptionFormValues>,
     defaultValues: REDEMPTION_FORM_DEFAULT_VALUES,
   })
 
@@ -143,10 +154,17 @@ export function RedemptionsMutateDrawer({
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
   const tokensOnly = currencyMeta.kind === 'tokens'
-  const quotaLabel = t('Quota ({{currency}})', { currency: currencyLabel })
-  const quotaPlaceholder = tokensOnly
-    ? t('Enter quota in tokens')
-    : t('Enter quota in {{currency}}', { currency: currencyLabel })
+  const quotaType = form.watch('quota_type')
+  const quotaLabel =
+    quotaType === 'gold'
+      ? t('Gold Amount')
+      : t('Quota ({{currency}})', { currency: currencyLabel })
+  const quotaPlaceholder =
+    quotaType === 'gold'
+      ? t('Enter gold amount')
+      : tokensOnly
+        ? t('Enter quota in tokens')
+        : t('Enter quota in {{currency}}', { currency: currencyLabel })
 
   return (
     <Sheet
@@ -200,6 +218,49 @@ export function RedemptionsMutateDrawer({
 
               <FormField
                 control={form.control}
+                name='quota_type'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Redemption Type')}</FormLabel>
+                    <Select
+                      items={[
+                        { value: 'quota', label: t('Balance Code') },
+                        { value: 'gold', label: t('Gold Code') },
+                      ]}
+                      value={field.value}
+                      onValueChange={(value) => {
+                        if (value === 'quota' || value === 'gold') {
+                          field.onChange(value)
+                          form.setValue('quota_dollars', 0)
+                        }
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t('Select account')} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          <SelectItem value='quota'>
+                            {t('Balance Code')}
+                          </SelectItem>
+                          <SelectItem value='gold'>{t('Gold Code')}</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {t(
+                        'Gold codes credit the gold account and do not participate in invitation rebates.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name='quota_dollars'
                 render={({ field }) => (
                   <FormItem>
@@ -208,7 +269,13 @@ export function RedemptionsMutateDrawer({
                       <Input
                         {...field}
                         type='number'
-                        step={tokensOnly ? 1 : 0.01}
+                        step={
+                          quotaType === 'gold'
+                            ? 0.000001
+                            : tokensOnly
+                              ? 1
+                              : 0.01
+                        }
                         placeholder={quotaPlaceholder}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
@@ -216,7 +283,9 @@ export function RedemptionsMutateDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      {tokensOnly
+                      {quotaType === 'gold'
+                        ? t('Enter the gold amount to credit.')
+                        : tokensOnly
                         ? t('Enter the quota amount in tokens')
                         : t('Enter the quota amount in {{currency}}', {
                             currency: currencyLabel,

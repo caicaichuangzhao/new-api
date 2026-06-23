@@ -313,17 +313,21 @@ export function setPromptShown(id) {
  */
 export function compareObjects(oldObject, newObject) {
   const changedProperties = [];
+  const normalizeValue = (value) => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  };
 
-  // 比较两个对象的属性
-  for (const key in oldObject) {
-    if (oldObject.hasOwnProperty(key) && newObject.hasOwnProperty(key)) {
-      if (oldObject[key] !== newObject[key]) {
-        changedProperties.push({
-          key: key,
-          oldValue: oldObject[key],
-          newValue: newObject[key],
-        });
-      }
+  for (const key of Object.keys(oldObject || {})) {
+    const oldValue = oldObject?.[key];
+    const newValue = newObject?.[key];
+    if (normalizeValue(oldValue) !== normalizeValue(newValue)) {
+      changedProperties.push({
+        key: key,
+        oldValue,
+        newValue,
+      });
     }
   }
 

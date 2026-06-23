@@ -92,6 +92,21 @@ export function parseQuotaFromDollars(amount: number): number {
 }
 
 /**
+ * Parse a gold amount into raw quota-precision units.
+ * Gold is displayed as its own platform currency and uses quota precision
+ * internally so small model costs can be deducted accurately.
+ */
+export function parseGoldAmountToQuotaUnits(amount: number): number {
+  if (!Number.isFinite(amount)) return 0
+
+  const { config } = getCurrencyDisplay()
+  const quotaPerUnit =
+    config.quotaPerUnit > 0 ? config.quotaPerUnit : 500000
+
+  return Math.round(amount * quotaPerUnit)
+}
+
+/**
  * Convert quota units to the configured display amount.
  * Reverse of parseQuotaFromDollars.
  */
@@ -107,6 +122,25 @@ export function quotaUnitsToDollars(units: number): number {
     meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
 
   return usdAmount * exchangeRate
+}
+
+/**
+ * Convert raw gold quota units to a user-facing gold amount.
+ */
+export function goldQuotaUnitsToAmount(units: number): number {
+  const { config } = getCurrencyDisplay()
+  const quotaPerUnit =
+    config.quotaPerUnit > 0 ? config.quotaPerUnit : 500000
+
+  return units / quotaPerUnit
+}
+
+export function formatGoldQuota(quota: number): string {
+  const amount = goldQuotaUnitsToAmount(quota)
+  const abs = Math.abs(amount)
+  return Intl.NumberFormat(undefined, {
+    maximumFractionDigits: abs >= 1 ? 2 : 6,
+  }).format(amount)
 }
 
 // ============================================================================

@@ -33,7 +33,10 @@ export interface ApiResponse<T = unknown> {
  * Standard API response types
  */
 export type TopupInfoResponse = ApiResponse<TopupInfo>
-export type RedemptionResponse = ApiResponse<number>
+export type RedemptionResponse = ApiResponse<number> & {
+  quota?: number
+  quota_type?: 'quota' | 'gold'
+}
 export type AmountResponse = ApiResponse<string>
 export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
   url?: string
@@ -271,6 +274,10 @@ export interface UserWalletData {
   username: string
   /** Current quota balance */
   quota: number
+  /** Gold balance stored in quota-precision units */
+  gold_quota?: number
+  /** Normal balance amount eligible for invitation consumption rewards */
+  rewardable_quota?: number
   /** Total used quota */
   used_quota: number
   /** Total request count */

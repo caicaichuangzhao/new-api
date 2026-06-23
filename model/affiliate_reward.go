@@ -11,6 +11,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -73,11 +74,18 @@ func grantAffiliateRewardTx(tx *gorm.DB, inviterId int, inviteeId int, sourceTyp
 		Quota:      quota,
 		Rate:       rate,
 	}
-	if err := tx.Create(reward).Error; err != nil {
-		if isDuplicateKeyError(err) {
+	result := tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "source_type"}, {Name: "source_id"}},
+		DoNothing: true,
+	}).Create(reward)
+	if result.Error != nil {
+		if isDuplicateKeyError(result.Error) {
 			return 0, nil
 		}
-		return 0, err
+		return 0, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return 0, nil
 	}
 	if err := tx.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]interface{}{
 		"aff_quota":   gorm.Expr("aff_quota + ?", quota),
@@ -92,6 +100,9 @@ func GrantAffiliateFirstTopUpRewardTx(tx *gorm.DB, topUp *TopUp, rechargedQuota 
 	if topUp == nil || topUp.UserId <= 0 || topUp.Id <= 0 || rechargedQuota <= 0 {
 		return 0, 0, nil
 	}
+	if !isFirstTopUpRewardProvider(topUp.PaymentProvider) || topUp.CreditType == TopUpCreditTypeGold {
+		return 0, 0, nil
+	}
 	if !operation_setting.IsPaymentComplianceConfirmed() || common.AffFirstTopUpRewardRatio <= 0 {
 		return 0, 0, nil
 	}
@@ -104,13 +115,23 @@ func GrantAffiliateFirstTopUpRewardTx(tx *gorm.DB, topUp *TopUp, rechargedQuota 
 		return 0, 0, nil
 	}
 
-	var previousSuccess int64
-	if err := tx.Model(&TopUp{}).
-		Where("user_id = ? AND status = ? AND id <> ?", topUp.UserId, common.TopUpStatusSuccess, topUp.Id).
-		Count(&previousSuccess).Error; err != nil {
+	var firstSuccess TopUp
+	if err := tx.Select("id").
+		Where(
+			"user_id = ? AND status = ? AND (payment_provider IN ? OR (payment_provider = ? AND (credit_type <> ? OR credit_type = '' OR credit_type IS NULL)))",
+			topUp.UserId,
+			common.TopUpStatusSuccess,
+			[]string{PaymentProviderEpay, PaymentProviderStripe, PaymentProviderCreem, PaymentProviderWaffo, PaymentProviderWaffoPancake},
+			PaymentProviderRedemption,
+			TopUpCreditTypeGold,
+		).
+		Order("complete_time ASC").
+		Order("create_time ASC").
+		Order("id ASC").
+		First(&firstSuccess).Error; err != nil {
 		return 0, 0, err
 	}
-	if previousSuccess > 0 {
+	if firstSuccess.Id != topUp.Id {
 		return invitee.InviterId, 0, nil
 	}
 
@@ -132,6 +153,47 @@ func GrantAffiliateFirstTopUpRewardTx(tx *gorm.DB, topUp *TopUp, rechargedQuota 
 	return invitee.InviterId, granted, err
 }
 
+func topUpCreditedQuotaForAffiliateReward(topUp *TopUp) int {
+	if topUp == nil || topUp.Amount <= 0 {
+		return 0
+	}
+	switch topUp.PaymentProvider {
+	case PaymentProviderCreem, PaymentProviderAdmin, PaymentProviderRedemption, PaymentProviderBalance:
+		return int(topUp.Amount)
+	case PaymentProviderStripe:
+		if topUp.Money > 0 {
+			return int(decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).IntPart())
+		}
+	}
+	return int(decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).IntPart())
+}
+
+func BackfillAffiliateFirstTopUpRewards() error {
+	if !operation_setting.IsPaymentComplianceConfirmed() || common.AffFirstTopUpRewardRatio <= 0 {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var topUps []TopUp
+		if err := tx.Where("status = ?", common.TopUpStatusSuccess).
+			Order("complete_time ASC").
+			Order("create_time ASC").
+			Order("id ASC").
+			Find(&topUps).Error; err != nil {
+			return err
+		}
+		for i := range topUps {
+			creditedQuota := topUpCreditedQuotaForAffiliateReward(&topUps[i])
+			if creditedQuota <= 0 {
+				continue
+			}
+			if _, _, err := GrantAffiliateFirstTopUpRewardTx(tx, &topUps[i], creditedQuota); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func GrantAffiliateFirstTopUpReward(topUp *TopUp, rechargedQuota int) (int, int, error) {
 	var inviterId int
 	var granted int
@@ -147,6 +209,18 @@ func GrantAffiliateFirstTopUpReward(topUp *TopUp, rechargedQuota int) (int, int,
 }
 
 func GrantAffiliateConsumptionReward(inviteeId int, consumedQuota int, requestId string) (int, int, error) {
+	return grantAffiliateConsumptionRewardWithSource(inviteeId, consumedQuota, requestId, "request:"+strings.TrimSpace(requestId))
+}
+
+func GrantAffiliateTaskConsumptionReward(inviteeId int, consumedQuota int, taskId string) (int, int, error) {
+	sourceRef := strings.TrimSpace(taskId)
+	if sourceRef == "" {
+		return 0, 0, nil
+	}
+	return grantAffiliateConsumptionRewardWithSource(inviteeId, consumedQuota, sourceRef, "task:"+sourceRef)
+}
+
+func grantAffiliateConsumptionRewardWithSource(inviteeId int, consumedQuota int, sourceRef string, sourceId string) (int, int, error) {
 	if inviteeId <= 0 || consumedQuota <= 0 {
 		return 0, 0, nil
 	}
@@ -154,11 +228,9 @@ func GrantAffiliateConsumptionReward(inviteeId int, consumedQuota int, requestId
 		return 0, 0, nil
 	}
 
-	sourceId := strings.TrimSpace(requestId)
-	if sourceId == "" {
+	sourceId = strings.TrimSpace(sourceId)
+	if sourceId == "" || sourceId == "request:" {
 		sourceId = fmt.Sprintf("consume:%d:%s", inviteeId, common.GetUUID())
-	} else {
-		sourceId = "request:" + sourceId
 	}
 
 	var inviterId int
@@ -183,7 +255,7 @@ func GrantAffiliateConsumptionReward(inviteeId int, consumedQuota int, requestId
 			inviteeId,
 			AffiliateRewardSourceConsumption,
 			sourceId,
-			requestId,
+			sourceRef,
 			rewardQuota,
 			common.AffConsumptionRewardRatio,
 		)

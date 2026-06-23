@@ -64,6 +64,10 @@ func ConfirmPaymentCompliance(c *gin.Context) {
 			return
 		}
 	}
+	if err := model.BackfillAffiliateFirstTopUpRewards(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 
 	logger.LogInfo(c.Request.Context(), fmt.Sprintf(
 		"payment compliance confirmed user_id=%d ip=%s terms_version=%s confirmed_at=%d",

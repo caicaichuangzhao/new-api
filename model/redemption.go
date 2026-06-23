@@ -18,12 +18,27 @@ type Redemption struct {
 	Status       int            `json:"status" gorm:"default:1"`
 	Name         string         `json:"name" gorm:"index"`
 	Quota        int            `json:"quota" gorm:"default:100"`
+	QuotaType    string         `json:"quota_type" gorm:"type:varchar(16);default:'quota'"`
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+}
+
+const (
+	RedemptionQuotaTypeQuota = "quota"
+	RedemptionQuotaTypeGold  = "gold"
+)
+
+func normalizeRedemptionQuotaType(quotaType string) string {
+	switch quotaType {
+	case RedemptionQuotaTypeGold:
+		return RedemptionQuotaTypeGold
+	default:
+		return RedemptionQuotaTypeQuota
+	}
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -112,14 +127,16 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
-func Redeem(key string, userId int) (quota int, err error) {
+func Redeem(key string, userId int) (quota int, quotaType string, err error) {
 	if key == "" {
-		return 0, errors.New("未提供兑换码")
+		return 0, RedemptionQuotaTypeQuota, errors.New("未提供兑换码")
 	}
 	if userId == 0 {
-		return 0, errors.New("无效的 user id")
+		return 0, RedemptionQuotaTypeQuota, errors.New("无效的 user id")
 	}
 	redemption := &Redemption{}
+	var affInviterId int
+	var affRewardQuota int
 
 	keyCol := "`key`"
 	if common.UsingPostgreSQL {
@@ -137,26 +154,124 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
 		}
-		err = tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
+		if redemption.Quota <= 0 {
+			return errors.New("该兑换码额度无效")
+		}
+		quotaType := normalizeRedemptionQuotaType(redemption.QuotaType)
+		quotaColumn := "quota"
+		if quotaType == RedemptionQuotaTypeGold {
+			quotaColumn = "gold_quota"
+		}
+		err = tx.Model(&User{}).Where("id = ?", userId).Update(quotaColumn, gorm.Expr(quotaColumn+" + ?", redemption.Quota)).Error
 		if err != nil {
 			return err
 		}
 		redemption.RedeemedTime = common.GetTimestamp()
 		redemption.Status = common.RedemptionCodeStatusUsed
 		redemption.UsedUserId = userId
-		err = tx.Save(redemption).Error
+		if err = tx.Save(redemption).Error; err != nil {
+			return err
+		}
+
+		tradeNo := fmt.Sprintf("RDM%dUSR%dNO%s", redemption.Id, userId, common.GetUUID())
+		topUp, err := createSuccessfulTopUpTx(tx, userId, int64(redemption.Quota), 0, tradeNo, PaymentMethodRedemption, PaymentProviderRedemption)
+		if err != nil {
+			return err
+		}
+		creditType := TopUpCreditTypeRedemption
+		if quotaType == RedemptionQuotaTypeGold {
+			creditType = TopUpCreditTypeGold
+		}
+		topUp.CreditType = creditType
+		topUp.RewardEligible = false
+		if err = tx.Model(topUp).Updates(map[string]interface{}{
+			"credit_type":     creditType,
+			"reward_eligible": false,
+		}).Error; err != nil {
+			return err
+		}
+		if quotaType == RedemptionQuotaTypeQuota {
+			affInviterId, affRewardQuota, err = GrantAffiliateFirstTopUpRewardTx(tx, topUp, redemption.Quota)
+		}
 		return err
 	})
 	if err != nil {
 		common.SysError("redemption failed: " + err.Error())
-		return 0, ErrRedeemFailed
+		return 0, RedemptionQuotaTypeQuota, ErrRedeemFailed
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
-	return redemption.Quota, nil
+	_ = invalidateUserCache(userId)
+	if normalizeRedemptionQuotaType(redemption.QuotaType) == RedemptionQuotaTypeGold {
+		RecordTopupLog(userId, fmt.Sprintf("通过兑换码兑换金币 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id), "", PaymentMethodRedemption, PaymentProviderRedemption)
+	} else {
+		RecordTopupLog(userId, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id), "", PaymentMethodRedemption, PaymentProviderRedemption)
+	}
+	if affRewardQuota > 0 {
+		RecordLog(affInviterId, LogTypeSystem, fmt.Sprintf("邀请用户首次充值返佣 %s", logger.LogQuota(affRewardQuota)))
+	}
+	return redemption.Quota, normalizeRedemptionQuotaType(redemption.QuotaType), nil
+}
+
+func BackfillRedemptionTopUps() error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var redemptions []Redemption
+		if err := tx.Unscoped().
+			Where("status = ? AND used_user_id > ? AND quota > ?", common.RedemptionCodeStatusUsed, 0, 0).
+			Order("redeemed_time ASC, id ASC").
+			Find(&redemptions).Error; err != nil {
+			return err
+		}
+
+		for _, redemption := range redemptions {
+			tradeNoPrefix := fmt.Sprintf("RDM%dUSR%d", redemption.Id, redemption.UsedUserId)
+			var topUp TopUp
+			result := tx.Where("payment_method = ? AND trade_no LIKE ?", PaymentMethodRedemption, tradeNoPrefix+"%").
+				Order("id ASC").
+				Limit(1).
+				Find(&topUp)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				timestamp := redemption.RedeemedTime
+				if timestamp <= 0 {
+					timestamp = redemption.CreatedTime
+				}
+				createdTopUp, err := createSuccessfulTopUpAtTx(
+					tx,
+					redemption.UsedUserId,
+					int64(redemption.Quota),
+					0,
+					tradeNoPrefix+"LEGACY",
+					PaymentMethodRedemption,
+					PaymentProviderRedemption,
+					timestamp,
+				)
+				if err != nil {
+					return err
+				}
+				topUp = *createdTopUp
+			}
+
+			if normalizeRedemptionQuotaType(redemption.QuotaType) == RedemptionQuotaTypeGold {
+				if err := tx.Model(&topUp).Updates(map[string]interface{}{
+					"credit_type":     TopUpCreditTypeGold,
+					"reward_eligible": false,
+				}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if _, _, err := GrantAffiliateFirstTopUpRewardTx(tx, &topUp, redemption.Quota); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (redemption *Redemption) Insert() error {
 	var err error
+	redemption.QuotaType = normalizeRedemptionQuotaType(redemption.QuotaType)
 	err = DB.Create(redemption).Error
 	return err
 }
@@ -169,7 +284,8 @@ func (redemption *Redemption) SelectUpdate() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
+	redemption.QuotaType = normalizeRedemptionQuotaType(redemption.QuotaType)
+	err = DB.Model(redemption).Select("name", "status", "quota", "quota_type", "redeemed_time", "expired_time").Updates(redemption).Error
 	return err
 }
 

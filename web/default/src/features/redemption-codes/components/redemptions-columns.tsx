@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import {
+  formatGoldQuota,
+  formatQuota,
+  formatTimestampToDate,
+} from '@/lib/format'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -173,9 +177,32 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       ),
       cell: ({ row }) => {
         const quota = row.getValue('quota') as number
+        const isGoldCode = row.original.quota_type === 'gold'
         return (
           <StatusBadge
-            label={formatQuota(quota)}
+            label={
+              isGoldCode
+                ? `${formatGoldQuota(quota)} ${t('Gold')}`
+                : formatQuota(quota)
+            }
+            variant='neutral'
+            copyable={false}
+          />
+        )
+      },
+      size: 120,
+    },
+    {
+      accessorKey: 'quota_type',
+      meta: { label: t('Type'), mobileHidden: true },
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Type')} />
+      ),
+      cell: ({ row }) => {
+        const isGoldCode = row.original.quota_type === 'gold'
+        return (
+          <StatusBadge
+            label={isGoldCode ? t('Gold Code') : t('Balance Code')}
             variant='neutral'
             copyable={false}
           />

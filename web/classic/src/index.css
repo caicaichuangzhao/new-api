@@ -977,6 +977,65 @@ html.dark .with-pastel-balls::before {
   padding: 10px !important;
 }
 
+/* ==================== 充值页: 邀请奖励封面按钮 ==================== */
+.invitation-cover-actions .semi-button.invitation-cover-action {
+  border: 1px solid rgba(255, 255, 255, 0.32) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
+}
+
+.invitation-cover-actions .semi-button.invitation-cover-action-primary:not(
+    .semi-button-disabled
+  ):not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: rgba(15, 23, 42, 0.92) !important;
+}
+
+.invitation-cover-actions .semi-button.invitation-cover-action:not(
+    .semi-button-disabled
+  ):not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+}
+
+.invitation-cover-actions
+  .semi-button.invitation-cover-action-primary:not(.semi-button-disabled):not(
+    :disabled
+  ):hover {
+  border-color: #fff !important;
+  background: #fff !important;
+  color: rgba(15, 23, 42, 1) !important;
+}
+
+.invitation-cover-actions .semi-button.invitation-cover-action.semi-button-disabled,
+.invitation-cover-actions .semi-button.invitation-cover-action:disabled {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+  opacity: 1 !important;
+}
+
+.invitation-cover-actions
+  .semi-button.invitation-cover-action
+  .semi-button-content {
+  color: inherit !important;
+  font-weight: 700;
+}
+
+.invitation-cover-actions .semi-button.invitation-cover-action svg {
+  color: inherit;
+  stroke: currentColor;
+}
+
 /* ==================== 使用日志: channel affinity tag ==================== */
 .semi-tag.channel-affinity-tag {
   border: 1px solid rgba(var(--semi-cyan-5), 0.35);

@@ -21,6 +21,7 @@ import React from 'react';
 import { Tag, Button, Space, Popover, Dropdown } from '@douyinfe/semi-ui';
 import { IconMore } from '@douyinfe/semi-icons';
 import { renderQuota, timestamp2string } from '../../../helpers';
+import { renderGoldQuota } from '../../../helpers/quota';
 import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
@@ -107,11 +108,17 @@ export const getRedemptionsColumns = ({
     {
       title: t('额度'),
       dataIndex: 'quota',
-      render: (text) => {
+      render: (text, record) => {
+        const isGold = record.quota_type === 'gold';
         return (
-          <div>
+          <div className='flex items-center gap-1'>
             <Tag color='grey' shape='circle'>
-              {renderQuota(parseInt(text))}
+              {isGold
+                ? `${renderGoldQuota(parseInt(text))} ${t('金币')}`
+                : renderQuota(parseInt(text))}
+            </Tag>
+            <Tag color={isGold ? 'yellow' : 'blue'} shape='circle'>
+              {isGold ? t('金币') : t('余额')}
             </Tag>
           </div>
         );

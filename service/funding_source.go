@@ -6,6 +6,13 @@ import (
 	"github.com/QuantumNous/new-api/model"
 )
 
+func minIntService(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // ---------------------------------------------------------------------------
 // FundingSource — 资金来源接口（钱包 or 订阅）
 // ---------------------------------------------------------------------------
@@ -27,8 +34,10 @@ type FundingSource interface {
 // ---------------------------------------------------------------------------
 
 type WalletFunding struct {
-	userId   int
-	consumed int // 实际预扣的用户额度
+	userId             int
+	consumed           int // 实际预扣的用户额度
+	rewardableConsumed int
+	consumeResult      model.WalletConsumeResult
 }
 
 func (w *WalletFunding) Source() string { return BillingSourceWallet }
@@ -37,10 +46,16 @@ func (w *WalletFunding) PreConsume(amount int) error {
 	if amount <= 0 {
 		return nil
 	}
-	if err := model.DecreaseUserQuota(w.userId, amount, false); err != nil {
+	result, err := model.ConsumeUserWalletQuota(w.userId, amount)
+	if err != nil {
 		return err
 	}
 	w.consumed = amount
+	w.rewardableConsumed = result.RewardableConsumed
+	w.consumeResult.QuotaConsumed += result.QuotaConsumed
+	w.consumeResult.GoldQuotaConsumed += result.GoldQuotaConsumed
+	w.consumeResult.GoldQuotaEquivalentConsume += result.GoldQuotaEquivalentConsume
+	w.consumeResult.RewardableConsumed += result.RewardableConsumed
 	return nil
 }
 
@@ -49,9 +64,19 @@ func (w *WalletFunding) Settle(delta int) error {
 		return nil
 	}
 	if delta > 0 {
-		return model.DecreaseUserQuota(w.userId, delta, false)
+		result, err := model.ConsumeUserWalletQuota(w.userId, delta)
+		if err != nil {
+			return err
+		}
+		w.consumed += delta
+		w.rewardableConsumed += result.RewardableConsumed
+		w.consumeResult.QuotaConsumed += result.QuotaConsumed
+		w.consumeResult.GoldQuotaConsumed += result.GoldQuotaConsumed
+		w.consumeResult.GoldQuotaEquivalentConsume += result.GoldQuotaEquivalentConsume
+		w.consumeResult.RewardableConsumed += result.RewardableConsumed
+		return nil
 	}
-	return model.IncreaseUserQuota(w.userId, -delta, false)
+	return w.refundPartial(-delta)
 }
 
 func (w *WalletFunding) Refund() error {
@@ -60,7 +85,57 @@ func (w *WalletFunding) Refund() error {
 	}
 	// IncreaseUserQuota 是 quota += N 的非幂等操作，不能重试，否则会多退额度。
 	// 订阅的 RefundSubscriptionPreConsume 有 requestId 幂等保护所以可以重试。
-	return model.IncreaseUserQuota(w.userId, w.consumed, false)
+	return model.RefundUserWalletQuota(w.userId, w.consumeResult)
+}
+
+func (w *WalletFunding) RewardableConsumed() int {
+	if w == nil {
+		return 0
+	}
+	return w.rewardableConsumed
+}
+
+func (w *WalletFunding) refundPartial(amount int) error {
+	if amount <= 0 {
+		return nil
+	}
+	if amount > w.consumed {
+		amount = w.consumed
+	}
+	toRefund := model.WalletConsumeResult{}
+	remaining := amount
+	if remaining > 0 {
+		fromGoldEquivalent := minIntService(w.consumeResult.GoldQuotaEquivalentConsume, remaining)
+		if fromGoldEquivalent > 0 {
+			goldToRefund := model.GoldCostForQuota(fromGoldEquivalent)
+			if fromGoldEquivalent == w.consumeResult.GoldQuotaEquivalentConsume || goldToRefund > w.consumeResult.GoldQuotaConsumed {
+				goldToRefund = w.consumeResult.GoldQuotaConsumed
+			}
+			toRefund.GoldQuotaConsumed = goldToRefund
+			toRefund.GoldQuotaEquivalentConsume = fromGoldEquivalent
+			w.consumeResult.GoldQuotaConsumed -= goldToRefund
+			w.consumeResult.GoldQuotaEquivalentConsume -= fromGoldEquivalent
+			remaining -= fromGoldEquivalent
+		}
+	}
+	if remaining > 0 {
+		fromQuota := minIntService(w.consumeResult.QuotaConsumed, remaining)
+		toRefund.QuotaConsumed = fromQuota
+		w.consumeResult.QuotaConsumed -= fromQuota
+		remaining -= fromQuota
+		fromRewardable := minIntService(w.consumeResult.RewardableConsumed, fromQuota)
+		toRefund.RewardableConsumed = fromRewardable
+		w.consumeResult.RewardableConsumed -= fromRewardable
+		w.rewardableConsumed -= fromRewardable
+	}
+	if err := model.RefundUserWalletQuota(w.userId, toRefund); err != nil {
+		return err
+	}
+	w.consumed -= amount
+	if w.rewardableConsumed < 0 {
+		w.rewardableConsumed = 0
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

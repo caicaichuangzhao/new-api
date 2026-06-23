@@ -2,7 +2,6 @@ package model
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -14,10 +13,18 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
 const UserNameMaxLength = 20
+
+func minInt(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
@@ -38,6 +45,8 @@ type User struct {
 	VerificationCode string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken      *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
 	Quota            int            `json:"quota" gorm:"type:int;default:0"`
+	GoldQuota        int            `json:"gold_quota" gorm:"type:int;default:0;column:gold_quota"`
+	RewardableQuota  int            `json:"rewardable_quota" gorm:"type:int;default:0;column:rewardable_quota"`
 	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
@@ -59,13 +68,20 @@ func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
 		Id:       user.Id,
 		Group:    user.Group,
-		Quota:    user.Quota,
+		Quota:    user.GetWalletQuota(),
 		Status:   user.Status,
 		Username: user.Username,
 		Setting:  user.Setting,
 		Email:    user.Email,
 	}
 	return cache
+}
+
+func (user *User) GetWalletQuota() int {
+	if user == nil {
+		return 0
+	}
+	return user.Quota + goldQuotaToEquivalent(user.GoldQuota)
 }
 
 func (user *User) GetAccessToken() string {
@@ -82,7 +98,7 @@ func (user *User) SetAccessToken(token string) {
 func (user *User) GetSetting() dto.UserSetting {
 	setting := dto.UserSetting{}
 	if user.Setting != "" {
-		err := json.Unmarshal([]byte(user.Setting), &setting)
+		err := common.Unmarshal([]byte(user.Setting), &setting)
 		if err != nil {
 			common.SysLog("failed to unmarshal setting: " + err.Error())
 		}
@@ -91,7 +107,7 @@ func (user *User) GetSetting() dto.UserSetting {
 }
 
 func (user *User) SetSetting(setting dto.UserSetting) {
-	settingBytes, err := json.Marshal(setting)
+	settingBytes, err := common.Marshal(setting)
 	if err != nil {
 		common.SysLog("failed to marshal setting: " + err.Error())
 		return
@@ -152,7 +168,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	// 普通用户不包含admin区域
 
 	// 转换为JSON字符串
-	configBytes, err := json.Marshal(defaultConfig)
+	configBytes, err := common.Marshal(defaultConfig)
 	if err != nil {
 		common.SysLog("生成默认边栏配置失败: " + err.Error())
 		return ""
@@ -328,15 +344,58 @@ func HardDeleteUserById(id int) error {
 	return err
 }
 
-func inviteUser(inviterId int) (err error) {
-	user, err := GetUserById(inviterId, true)
-	if err != nil {
+func inviteUser(inviterId int, rewardQuota int) error {
+	if inviterId <= 0 {
+		return nil
+	}
+	updates := map[string]interface{}{
+		"aff_count": gorm.Expr("aff_count + ?", 1),
+	}
+	if rewardQuota > 0 {
+		updates["aff_quota"] = gorm.Expr("aff_quota + ?", rewardQuota)
+		updates["aff_history"] = gorm.Expr("aff_history + ?", rewardQuota)
+	}
+	if err := DB.Model(&User{}).Where("id = ?", inviterId).Updates(updates).Error; err != nil {
 		return err
 	}
-	user.AffCount++
-	user.AffQuota += common.QuotaForInviter
-	user.AffHistoryQuota += common.QuotaForInviter
-	return DB.Save(user).Error
+	_ = invalidateUserCache(inviterId)
+	return nil
+}
+
+type affiliateInviteCountRow struct {
+	InviterId int   `gorm:"column:inviter_id"`
+	Count     int64 `gorm:"column:count"`
+}
+
+func ReconcileAffiliateInviteCounts() error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var rows []affiliateInviteCountRow
+		if err := tx.Unscoped().Model(&User{}).
+			Select("inviter_id, COUNT(*) AS count").
+			Where("inviter_id > ?", 0).
+			Group("inviter_id").
+			Scan(&rows).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Unscoped().Model(&User{}).
+			Where("aff_count <> ?", 0).
+			Update("aff_count", 0).Error; err != nil {
+			return err
+		}
+
+		for _, row := range rows {
+			if row.InviterId <= 0 {
+				continue
+			}
+			if err := tx.Unscoped().Model(&User{}).
+				Where("id = ?", row.InviterId).
+				Update("aff_count", row.Count).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
@@ -366,6 +425,9 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 更新用户额度
 	user.AffQuota -= quota
 	user.Quota += quota
+	if user.RewardableQuota > user.Quota {
+		user.RewardableQuota = user.Quota
+	}
 
 	// 保存用户状态
 	if err := tx.Save(user).Error; err != nil {
@@ -374,6 +436,17 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 
 	// 提交事务
 	return tx.Commit().Error
+}
+
+type WalletConsumeResult struct {
+	QuotaConsumed              int
+	GoldQuotaConsumed          int
+	GoldQuotaEquivalentConsume int
+	RewardableConsumed         int
+}
+
+func (r WalletConsumeResult) TotalConsumed() int {
+	return r.QuotaConsumed + r.GoldQuotaEquivalentConsume
 }
 
 func (user *User) Insert(inviterId int) error {
@@ -418,15 +491,21 @@ func (user *User) Insert(inviterId int) error {
 	if common.QuotaForNewUser > 0 {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
-		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
-			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
+	if inviterId != 0 {
+		inviterRewardQuota := 0
+		if operation_setting.IsPaymentComplianceConfirmed() {
+			if common.QuotaForInvitee > 0 {
+				_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
+				RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
+			}
+			if common.QuotaForInviter > 0 {
+				inviterRewardQuota = common.QuotaForInviter
+			}
 		}
-		if common.QuotaForInviter > 0 {
-			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
+		if err := inviteUser(inviterId, inviterRewardQuota); err != nil {
+			common.SysLog(fmt.Sprintf("failed to update inviter %d affiliate count: %s", inviterId, err.Error()))
+		} else if inviterRewardQuota > 0 {
+			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(inviterRewardQuota)))
 		}
 	}
 	return nil
@@ -479,14 +558,21 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 	if common.QuotaForNewUser > 0 {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
-		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
-			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
+	if inviterId != 0 {
+		inviterRewardQuota := 0
+		if operation_setting.IsPaymentComplianceConfirmed() {
+			if common.QuotaForInvitee > 0 {
+				_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
+				RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
+			}
+			if common.QuotaForInviter > 0 {
+				inviterRewardQuota = common.QuotaForInviter
+			}
 		}
-		if common.QuotaForInviter > 0 {
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
+		if err := inviteUser(inviterId, inviterRewardQuota); err != nil {
+			common.SysLog(fmt.Sprintf("failed to update inviter %d affiliate count: %s", inviterId, err.Error()))
+		} else if inviterRewardQuota > 0 {
+			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(inviterRewardQuota)))
 		}
 	}
 }
@@ -788,20 +874,24 @@ func GetUserQuota(id int, fromDB bool) (quota int, err error) {
 			})
 		}
 	}()
-	if !fromDB && common.RedisEnabled {
-		quota, err := getUserQuotaCache(id)
-		if err == nil {
-			return quota, nil
-		}
-		// Don't return error - fall through to DB
-	}
 	fromDB = true
-	err = DB.Model(&User{}).Where("id = ?", id).Select("quota").Find(&quota).Error
+	var user User
+	err = DB.Model(&User{}).Where("id = ?", id).Select("quota", "gold_quota").Find(&user).Error
 	if err != nil {
 		return 0, err
 	}
 
-	return quota, nil
+	return user.GetWalletQuota(), nil
+}
+
+func GetUserGoldQuota(id int) (quota int, err error) {
+	err = DB.Model(&User{}).Where("id = ?", id).Select("gold_quota").Find(&quota).Error
+	return quota, err
+}
+
+func GetUserRewardableQuota(id int) (quota int, err error) {
+	err = DB.Model(&User{}).Where("id = ?", id).Select("rewardable_quota").Find(&quota).Error
+	return quota, err
 }
 
 func GetUserUsedQuota(id int) (quota int, err error) {
@@ -905,6 +995,79 @@ func increaseUserQuota(id int, quota int) (err error) {
 	return err
 }
 
+func IncreaseUserRewardableQuota(id int, quota int) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return nil
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("rewardable_quota", gorm.Expr("rewardable_quota + ?", quota)).Error; err != nil {
+		return err
+	}
+	return invalidateUserCache(id)
+}
+
+func IncreaseUserQuotaWithRewardable(id int, quota int, rewardable int, db bool) error {
+	if quota < 0 || rewardable < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if rewardable > quota {
+		return errors.New("可返利额度不能大于充值额度")
+	}
+	if quota == 0 && rewardable == 0 {
+		return nil
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserQuota(id, int64(quota)); err != nil {
+			common.SysLog("failed to increase user quota: " + err.Error())
+		}
+	})
+	if !db && common.BatchUpdateEnabled && rewardable == 0 {
+		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
+		return nil
+	}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{}
+		if quota != 0 {
+			updates["quota"] = gorm.Expr("quota + ?", quota)
+		}
+		if rewardable != 0 {
+			updates["rewardable_quota"] = gorm.Expr("rewardable_quota + ?", rewardable)
+		}
+		if len(updates) == 0 {
+			return nil
+		}
+		return tx.Model(&User{}).Where("id = ?", id).Updates(updates).Error
+	})
+	if err != nil {
+		return err
+	}
+	return invalidateUserCache(id)
+}
+
+func IncreaseUserGoldQuota(id int, quota int, db bool) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return nil
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserQuota(id, int64(goldQuotaToEquivalent(quota))); err != nil {
+			common.SysLog("failed to increase user gold quota: " + err.Error())
+		}
+	})
+	err := DB.Model(&User{}).Where("id = ?", id).Update("gold_quota", gorm.Expr("gold_quota + ?", quota)).Error
+	if err != nil {
+		return err
+	}
+	if db {
+		return invalidateUserCache(id)
+	}
+	return nil
+}
+
 func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
@@ -915,19 +1078,200 @@ func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 			common.SysLog("failed to decrease user quota: " + err.Error())
 		}
 	})
-	if !db && common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeUserQuota, id, -quota)
-		return nil
-	}
 	return decreaseUserQuota(id, quota)
 }
 
 func decreaseUserQuota(id int, quota int) (err error) {
-	err = DB.Model(&User{}).Where("id = ?", id).Update("quota", gorm.Expr("quota - ?", quota)).Error
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Select("id", "quota", "rewardable_quota").Where("id = ?", id).First(&user).Error; err != nil {
+			return err
+		}
+		remainingQuota := user.Quota - quota
+		if remainingQuota < 0 {
+			remainingQuota = 0
+		}
+		updates := map[string]interface{}{
+			"quota": gorm.Expr("quota - ?", quota),
+		}
+		if user.RewardableQuota > remainingQuota {
+			updates["rewardable_quota"] = remainingQuota
+		}
+		return tx.Model(&User{}).Where("id = ?", id).Updates(updates).Error
+	})
 	if err != nil {
 		return err
 	}
 	return err
+}
+
+func DecreaseUserGoldQuota(id int, quota int, db bool) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return nil
+	}
+	gopool.Go(func() {
+		if err := cacheDecrUserQuota(id, int64(goldQuotaToEquivalent(quota))); err != nil {
+			common.SysLog("failed to decrease user gold quota: " + err.Error())
+		}
+	})
+	err := DB.Model(&User{}).Where("id = ?", id).Update("gold_quota", gorm.Expr("gold_quota - ?", quota)).Error
+	if err != nil {
+		return err
+	}
+	if db {
+		return invalidateUserCache(id)
+	}
+	return nil
+}
+
+func OverrideUserQuota(id int, quota int) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"quota":            quota,
+		"rewardable_quota": gorm.Expr("CASE WHEN rewardable_quota > ? THEN ? ELSE rewardable_quota END", quota, quota),
+	}).Error; err != nil {
+		return err
+	}
+	return invalidateUserCache(id)
+}
+
+func OverrideUserGoldQuota(id int, quota int) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("gold_quota", quota).Error; err != nil {
+		return err
+	}
+	return invalidateUserCache(id)
+}
+
+func GoldCostForQuota(quota int) int {
+	if quota <= 0 {
+		return 0
+	}
+	rate := common.GoldQuotaExchangeRate
+	if rate <= 0 {
+		rate = 1
+	}
+	return int(decimal.NewFromInt(int64(quota)).Mul(decimal.NewFromFloat(rate)).Ceil().IntPart())
+}
+
+func goldQuotaToEquivalent(goldQuota int) int {
+	if goldQuota <= 0 {
+		return 0
+	}
+	rate := common.GoldQuotaExchangeRate
+	if rate <= 0 {
+		rate = 1
+	}
+	return int(decimal.NewFromInt(int64(goldQuota)).Div(decimal.NewFromFloat(rate)).Floor().IntPart())
+}
+
+func ConsumeUserWalletQuota(id int, quota int) (WalletConsumeResult, error) {
+	result := WalletConsumeResult{}
+	if quota < 0 {
+		return result, errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return result, nil
+	}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").
+			Select("id", "quota", "gold_quota", "rewardable_quota").
+			Where("id = ?", id).
+			First(&user).Error; err != nil {
+			return err
+		}
+
+		availableQuota := user.Quota
+		if availableQuota < 0 {
+			availableQuota = 0
+		}
+		result.QuotaConsumed = minInt(availableQuota, quota)
+		remaining := quota - result.QuotaConsumed
+		result.GoldQuotaEquivalentConsume = remaining
+		result.GoldQuotaConsumed = GoldCostForQuota(remaining)
+		if remaining <= 0 {
+			result.GoldQuotaConsumed = 0
+			result.GoldQuotaEquivalentConsume = 0
+		}
+		if result.GoldQuotaConsumed > user.GoldQuota {
+			return fmt.Errorf("用户额度不足, 剩余额度: %s, 金币: %s, 需要额度: %s", logger.FormatQuota(user.Quota), logger.FormatQuota(user.GoldQuota), logger.FormatQuota(quota))
+		}
+		nonRewardableQuota := user.Quota - user.RewardableQuota
+		if nonRewardableQuota < 0 {
+			nonRewardableQuota = 0
+		}
+		nonRewardableConsumed := minInt(result.QuotaConsumed, nonRewardableQuota)
+		result.RewardableConsumed = result.QuotaConsumed - nonRewardableConsumed
+		if result.RewardableConsumed > user.RewardableQuota {
+			result.RewardableConsumed = user.RewardableQuota
+		}
+
+		updates := map[string]interface{}{}
+		if result.QuotaConsumed > 0 {
+			updates["quota"] = gorm.Expr("quota - ?", result.QuotaConsumed)
+		}
+		if result.GoldQuotaConsumed > 0 {
+			updates["gold_quota"] = gorm.Expr("gold_quota - ?", result.GoldQuotaConsumed)
+		}
+		if result.RewardableConsumed > 0 {
+			updates["rewardable_quota"] = gorm.Expr("rewardable_quota - ?", result.RewardableConsumed)
+		}
+		if len(updates) == 0 {
+			return nil
+		}
+		return tx.Model(&User{}).Where("id = ?", id).Updates(updates).Error
+	})
+	if err != nil {
+		return result, err
+	}
+	gopool.Go(func() {
+		if err := cacheDecrUserQuota(id, int64(result.TotalConsumed())); err != nil {
+			common.SysLog("failed to decrease user wallet quota: " + err.Error())
+		}
+	})
+	return result, nil
+}
+
+func RefundUserWalletQuota(id int, result WalletConsumeResult) error {
+	if result.QuotaConsumed < 0 || result.GoldQuotaConsumed < 0 || result.RewardableConsumed < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if result.TotalConsumed() == 0 && result.RewardableConsumed == 0 {
+		return nil
+	}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{}
+		if result.QuotaConsumed > 0 {
+			updates["quota"] = gorm.Expr("quota + ?", result.QuotaConsumed)
+		}
+		if result.GoldQuotaConsumed > 0 {
+			updates["gold_quota"] = gorm.Expr("gold_quota + ?", result.GoldQuotaConsumed)
+		}
+		if result.RewardableConsumed > 0 {
+			updates["rewardable_quota"] = gorm.Expr("rewardable_quota + ?", result.RewardableConsumed)
+		}
+		if len(updates) == 0 {
+			return nil
+		}
+		return tx.Model(&User{}).Where("id = ?", id).Updates(updates).Error
+	})
+	if err != nil {
+		return err
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserQuota(id, int64(result.TotalConsumed())); err != nil {
+			common.SysLog("failed to refund user wallet quota: " + err.Error())
+		}
+	})
+	return nil
 }
 
 func DeltaUpdateUserQuota(id int, delta int) (err error) {

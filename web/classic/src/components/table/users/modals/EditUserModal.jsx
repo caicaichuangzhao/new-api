@@ -29,6 +29,9 @@ import {
 import {
   quotaToDisplayAmount,
   displayAmountToQuota,
+  goldAmountToQuota,
+  goldQuotaToAmount,
+  renderGoldQuota,
 } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -68,6 +71,7 @@ const EditUserModal = (props) => {
   const [adjustQuotaLocal, setAdjustQuotaLocal] = useState('');
   const [adjustAmountLocal, setAdjustAmountLocal] = useState('');
   const [adjustMode, setAdjustMode] = useState('add');
+  const [adjustAccountType, setAdjustAccountType] = useState('quota');
   const [adjustLoading, setAdjustLoading] = useState(false);
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
@@ -91,10 +95,38 @@ const EditUserModal = (props) => {
     linux_do_id: '',
     email: '',
     quota: 0,
+    gold_quota: 0,
     quota_amount: 0,
     group: 'default',
     remark: '',
   });
+
+  const currentAdjustQuota = () => {
+    if (adjustAccountType === 'gold') {
+      return formApiRef.current?.getValue('gold_quota') || 0;
+    }
+    return formApiRef.current?.getValue('quota') || 0;
+  };
+
+  const adjustAmountToQuota = (amount) => {
+    return adjustAccountType === 'gold'
+      ? goldAmountToQuota(amount)
+      : displayAmountToQuota(amount);
+  };
+
+  const adjustQuotaToAmount = (quota) => {
+    const amount =
+      adjustAccountType === 'gold'
+        ? goldQuotaToAmount(quota)
+        : quotaToDisplayAmount(quota);
+    return Number(amount.toFixed(6));
+  };
+
+  const renderAdjustQuota = (quota) => {
+    return adjustAccountType === 'gold'
+      ? `${renderGoldQuota(quota)} ${t('金币')}`
+      : renderQuota(quota);
+  };
 
   const fetchGroups = async () => {
     try {
@@ -178,6 +210,7 @@ const EditUserModal = (props) => {
         action: 'add_quota',
         mode: adjustMode,
         value: adjustMode === 'override' ? quotaVal : Math.abs(quotaVal),
+        quota_type: adjustAccountType,
       });
       const { success, message } = res.data;
       if (success) {
@@ -205,18 +238,19 @@ const EditUserModal = (props) => {
   };
 
   const getPreviewText = () => {
-    const current = formApiRef.current?.getValue('quota') || 0;
+    const current = currentAdjustQuota();
     const val = parseInt(adjustQuotaLocal) || 0;
     let result;
+    const accountLabel = adjustAccountType === 'gold' ? t('金币') : t('额度');
     switch (adjustMode) {
       case 'add':
         result = current + Math.abs(val);
-        return `${t('当前额度')}：${renderQuota(current)}，+${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
+        return `${t('当前{{account}}', { account: accountLabel })}：${renderAdjustQuota(current)}，+${renderAdjustQuota(Math.abs(val))} = ${renderAdjustQuota(result)}`;
       case 'subtract':
         result = current - Math.abs(val);
-        return `${t('当前额度')}：${renderQuota(current)}，-${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
+        return `${t('当前{{account}}', { account: accountLabel })}：${renderAdjustQuota(current)}，-${renderAdjustQuota(Math.abs(val))} = ${renderAdjustQuota(result)}`;
       case 'override':
-        return `${t('当前额度')}：${renderQuota(current)} → ${renderQuota(val)}`;
+        return `${t('当前{{account}}', { account: accountLabel })}：${renderAdjustQuota(current)} → ${renderAdjustQuota(val)}`;
       default:
         return '';
     }
@@ -470,6 +504,7 @@ const EditUserModal = (props) => {
           setAdjustQuotaLocal('');
           setAdjustAmountLocal('');
           setAdjustMode('add');
+          setAdjustAccountType('quota');
         }}
         confirmLoading={adjustLoading}
         closable={null}
@@ -484,6 +519,24 @@ const EditUserModal = (props) => {
           <Text type='secondary' className='block mb-2'>
             {getPreviewText()}
           </Text>
+        </div>
+        <div className='mb-3'>
+          <div className='mb-1'>
+            <Text size='small'>{t('账户')}</Text>
+          </div>
+          <RadioGroup
+            type='button'
+            value={adjustAccountType}
+            onChange={(e) => {
+              setAdjustAccountType(e.target.value);
+              setAdjustQuotaLocal('');
+              setAdjustAmountLocal('');
+            }}
+            style={{ width: '100%' }}
+          >
+            <Radio value='quota'>{t('余额')}</Radio>
+            <Radio value='gold'>{t('金币')}</Radio>
+          </RadioGroup>
         </div>
         <div className='mb-3'>
           <div className='mb-1'>
@@ -506,11 +559,20 @@ const EditUserModal = (props) => {
         </div>
         <div className='mb-3'>
           <div className='mb-1'>
-            <Text size='small'>{t('金额')}</Text>
+            <Text size='small'>
+              {adjustAccountType === 'gold' ? t('金币数量') : t('金额')}
+            </Text>
           </div>
           <InputNumber
-            prefix={getCurrencyConfig().symbol}
-            placeholder={t('输入金额')}
+            prefix={
+              adjustAccountType === 'gold'
+                ? undefined
+                : getCurrencyConfig().symbol
+            }
+            suffix={adjustAccountType === 'gold' ? t('金币') : undefined}
+            placeholder={
+              adjustAccountType === 'gold' ? t('输入金币数量') : t('输入金额')
+            }
             value={adjustAmountLocal}
             precision={6}
             min={adjustMode === 'override' ? undefined : 0}
@@ -522,8 +584,8 @@ const EditUserModal = (props) => {
                 amount === ''
                   ? ''
                   : adjustMode === 'override'
-                    ? displayAmountToQuota(amount)
-                    : displayAmountToQuota(Math.abs(amount)),
+                    ? adjustAmountToQuota(amount)
+                    : adjustAmountToQuota(Math.abs(amount)),
               );
             }}
             style={{ width: '100%' }}
@@ -550,13 +612,13 @@ const EditUserModal = (props) => {
             onChange={(val) => {
               const quota = val === '' || val == null ? '' : val;
               setAdjustQuotaLocal(quota);
-              setAdjustAmountLocal(
-                quota === ''
-                  ? ''
-                  : adjustMode === 'override'
-                    ? Number(quotaToDisplayAmount(quota).toFixed(6))
-                    : Number(quotaToDisplayAmount(Math.abs(quota)).toFixed(6)),
-              );
+            setAdjustAmountLocal(
+              quota === ''
+                ? ''
+                : adjustMode === 'override'
+                  ? adjustQuotaToAmount(quota)
+                  : adjustQuotaToAmount(Math.abs(quota)),
+            );
             }}
             style={{ width: '100%' }}
             showClear

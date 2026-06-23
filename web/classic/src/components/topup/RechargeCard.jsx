@@ -49,6 +49,7 @@ import { IconGift } from '@douyinfe/semi-icons';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
 import { useActualTheme } from '../../context/Theme';
 import { getCurrencyConfig } from '../../helpers/render';
+import { renderGoldQuota } from '../../helpers/quota';
 import SubscriptionPlansCard from './SubscriptionPlansCard';
 
 const { Text } = Typography;
@@ -145,7 +146,7 @@ const RechargeCard = ({
               </div>
 
               {/* 统计数据 */}
-              <div className='grid grid-cols-3 gap-6 mt-4'>
+              <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4'>
                 {/* 当前余额 */}
                 <div className='text-center'>
                   <div
@@ -167,6 +168,31 @@ const RechargeCard = ({
                       }}
                     >
                       {t('当前余额')}
+                    </Text>
+                  </div>
+                </div>
+
+                {/* 金币余额 */}
+                <div className='text-center'>
+                  <div
+                    className='text-base sm:text-2xl font-bold mb-2'
+                    style={{ color: 'white' }}
+                  >
+                    {renderGoldQuota(userState?.user?.gold_quota || 0)}
+                  </div>
+                  <div className='flex items-center justify-center text-sm'>
+                    <Coins
+                      size={14}
+                      className='mr-1'
+                      style={{ color: 'rgba(255,255,255,0.8)' }}
+                    />
+                    <Text
+                      style={{
+                        color: 'rgba(255,255,255,0.8)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {t('金币')}
                     </Text>
                   </div>
                 </div>

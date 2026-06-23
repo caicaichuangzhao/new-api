@@ -146,6 +146,7 @@ var QuotaForInviter = 0
 var QuotaForInvitee = 0
 var AffFirstTopUpRewardRatio = 0.0
 var AffConsumptionRewardRatio = 0.0
+var GoldQuotaExchangeRate = 1.0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
